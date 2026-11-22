@@ -1,0 +1,16 @@
+node_modules/
+.space-build/
+app.db
+app.db-shm
+app.db-wal
+*.log
+.DS_Store
+.bun-cache/
+audits/
+android/
+client/dist/
+client/src/assets/fonts/*.woff2
+icon.webp
+vendor/*.tgz
+.space-build-cvm/
+.harness/
