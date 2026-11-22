@@ -48,7 +48,7 @@ export function ClubCreationScreen({
   };
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center px-5 py-8">
+    <div className="mx-auto flex min-h-full w-full max-w-xl flex-col justify-center px-5 py-8">
       <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[var(--accent)]">{t('create.welcome')}</p>
       <h1 className="font-display mt-1 text-4xl font-bold uppercase leading-none tracking-wide">{t('create.title')}</h1>
       <p className="mt-2 text-sm leading-relaxed text-[var(--dim)]">

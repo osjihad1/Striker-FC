@@ -24,6 +24,49 @@ function PitchMark({ size = 74 }: { size?: number }) {
   );
 }
 
+function Football({ size = 128 }: { size?: number }) {
+  // A classic paneled football in pure inline SVG (offline, no assets):
+  // shaded white sphere, centre pentagon, five clipped outer patches and
+  // the seams between them. The .intro-ball CSS animation bounces and
+  // spins the whole mark in under the floodlights.
+  const patch = "0,-16 15.2,-4.9 9.4,12.9 -9.4,12.9 -15.2,-4.9";
+  return (
+    <span className="relative inline-flex flex-col items-center" aria-hidden>
+      <svg viewBox="0 0 100 100" width={size} height={size} className="intro-ball">
+        <defs>
+          <clipPath id="intro-ball-clip"><circle cx="50" cy="50" r="47" /></clipPath>
+          <radialGradient id="intro-ball-shade" cx="35%" cy="28%" r="85%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="68%" stopColor="#e9eef6" />
+            <stop offset="100%" stopColor="#bcc7d6" />
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="47" fill="url(#intro-ball-shade)" />
+        <g clipPath="url(#intro-ball-clip)">
+          <g stroke="#8fa1b8" strokeWidth="1.3">
+            <line x1="50" y1="33" x2="50" y2="4" />
+            <line x1="65.6" y1="44.4" x2="90" y2="28" />
+            <line x1="59.7" y1="62.6" x2="77" y2="90" />
+            <line x1="40.3" y1="62.6" x2="23" y2="90" />
+            <line x1="34.4" y1="44.4" x2="10" y2="28" />
+          </g>
+          <polygon points="50,33 65.6,44.4 59.7,62.6 40.3,62.6 34.4,44.4" fill="#101827" />
+          <g transform="translate(50 6)"><polygon points={patch} fill="#101827" /></g>
+          <g transform="translate(91 35) rotate(72)"><polygon points={patch} fill="#101827" /></g>
+          <g transform="translate(76 86) rotate(144)"><polygon points={patch} fill="#101827" /></g>
+          <g transform="translate(24 86) rotate(216)"><polygon points={patch} fill="#101827" /></g>
+          <g transform="translate(9 35) rotate(288)"><polygon points={patch} fill="#101827" /></g>
+        </g>
+        <circle cx="50" cy="50" r="47" fill="none" stroke="#101827" strokeWidth="2.5" />
+      </svg>
+      <span
+        className="intro-ball-shadow -mt-2 block h-3 rounded-[50%] bg-black"
+        style={{ width: size * 0.72 }}
+      />
+    </span>
+  );
+}
+
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const doneRef = useRef(false);
   // The callback is held in a ref and the timer effect runs exactly once:
@@ -35,30 +78,43 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const t = window.setTimeout(() => {
       if (!doneRef.current) { doneRef.current = true; onDoneRef.current(); }
-    }, 2100);
+    }, 2650);
     return () => window.clearTimeout(t);
   }, []);
 
   return (
     <button
       type="button"
-      aria-label="Continue to loading"
+      aria-label="Skip intro — continue to loading"
       onClick={() => { if (!doneRef.current) { doneRef.current = true; onDone(); } }}
-      className="flex min-h-dvh w-full flex-col items-center justify-center gap-5 px-6 text-center"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden px-6 text-center"
       style={{ background: 'radial-gradient(120% 90% at 50% 0%, #14301c 0%, #0a1a33 45%, var(--bg) 78%)' }}
     >
-      <PitchMark />
-      <span className="font-display text-6xl font-bold uppercase leading-none tracking-wide text-[var(--text)] sm:text-7xl">
-        Striker <span className="text-[var(--accent)]">FC</span>
+      {/* Landscape-first intro: ball and wordmark sit side by side on a wide
+          screen, stacked only on narrow portrait fallbacks. */}
+      <span className="flex flex-col items-center gap-5 sm:flex-row sm:gap-9 sm:text-left">
+        <Football />
+        <span className="flex flex-col items-center gap-2 sm:items-start">
+          <span className="relative block overflow-hidden">
+            <span className="intro-logo font-display block text-6xl font-bold uppercase leading-none tracking-wide text-[var(--text)] sm:text-7xl">
+              Striker <span className="text-[var(--accent)]">FC</span>
+            </span>
+            <span
+              aria-hidden
+              className="intro-sweep-bar pointer-events-none absolute inset-y-0 left-0 w-1/3"
+              style={{ background: 'linear-gradient(100deg, transparent 0%, rgba(255,255,255,0.38) 50%, transparent 100%)' }}
+            />
+          </span>
+          <span className="intro-tag text-xs font-semibold uppercase tracking-[0.35em] text-[var(--dim)]">
+            3D Football · Ultimate Team
+          </span>
+          <span className="intro-credit font-display mt-3 text-2xl font-semibold uppercase tracking-[0.2em] text-[var(--gold)]">
+            Made by Jihad
+          </span>
+        </span>
       </span>
-      <span className="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--dim)]">
-        3D Football · Ultimate Team
-      </span>
-      <span className="mt-10 font-display text-2xl font-semibold uppercase tracking-[0.2em] text-[var(--gold)]">
-        Made by Jihad
-      </span>
-      <span className="mt-2 animate-pulse text-[11px] font-semibold uppercase tracking-widest text-[var(--dim)]">
-        Tap to continue
+      <span className="intro-skip absolute inset-x-0 bottom-[max(1.1rem,env(safe-area-inset-bottom))] text-[11px] font-semibold uppercase tracking-widest text-[var(--dim)]">
+        Tap to skip
       </span>
     </button>
   );
@@ -123,7 +179,7 @@ export function LoadingScreen({ ready, onDone }: { ready: boolean; onDone: () =>
   const tip = LOAD_TIPS[Math.floor(progress / 28) % LOAD_TIPS.length]!;
 
   return (
-    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-6 text-center" role="status" aria-label="Loading Striker FC">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-y-auto px-6 py-4 text-center" role="status" aria-label="Loading Striker FC">
       <PitchMark size={54} />
       <p className="font-display text-4xl font-bold uppercase tracking-wide">
         Striker <span className="text-[var(--accent)]">FC</span>
@@ -158,7 +214,7 @@ export function LoginScreen({
   onGuest: () => void;
 }) {
   return (
-    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 px-6 text-center">
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 overflow-y-auto px-6 py-4 text-center">
       <PitchMark size={60} />
       <div>
         <p className="font-display text-4xl font-bold uppercase leading-none tracking-wide">

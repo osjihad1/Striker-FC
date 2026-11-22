@@ -64,7 +64,7 @@ function QuestRow({
             type="button"
             onClick={() => onClaim(quest)}
             aria-label={tr('quests.claimReward')}
-            className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-bold text-black"
+            className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow"
           >
             {tr('quests.claimReward')}
           </button>
@@ -180,12 +180,12 @@ export function QuestsAndPassScreen({
         </div>
         <div className="flex flex-wrap gap-2">
           {claimableQuests > 0 && (
-            <span className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-bold text-black" role="status">
+            <span className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow" role="status">
               {tr('quests.readyN', { n: claimableQuests })}
             </span>
           )}
           {claimableTiers > 0 && (
-            <button type="button" onClick={claimAllTiers} className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-[#0a120c]">
+            <button type="button" onClick={claimAllTiers} className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow">
               {tr('quests.claimAll', { n: claimableTiers })}
             </button>
           )}
@@ -307,7 +307,7 @@ export function QuestsAndPassScreen({
                       type="button"
                       onClick={() => claimTier(t.tier)}
                       aria-label={`Claim Season Pass tier ${t.tier} reward: ${t.rewardLabel}`}
-                      className="rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-bold text-black"
+                      className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow"
                     >
                       {tr('hub.claim')}
                     </button>

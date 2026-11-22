@@ -11,7 +11,7 @@ import { matchEventBus } from '../../core/EventBus';
 import type { SaveProfile, SubStats } from '../../core/types';
 import { getCardEffectiveOvr, maxTrainingLevelForRank, xpNeeded } from '../../core/types';
 import { getPlayerById } from '../../data/PlayerDatabase';
-import { ALL_CLUBS } from '../../data/Clubs';
+import { ALL_CLUBS, clubKit } from '../../data/Clubs';
 import { getPlayStyle } from '../../data/PlayStyles';
 import { ModalShell } from '../components/ModalShell';
 import { PlayerCard, RANK_GEMS } from '../components/PlayerCard';
@@ -89,6 +89,7 @@ export function PlayerDetailScreen({
 }) {
   const [tab, setTab] = useState<DetailTab>('STATS');
   const [faceView, setFaceView] = useState(false);
+  const [awayKit, setAwayKit] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [armedFodder, setArmedFodder] = useState<string | null>(null);
@@ -158,11 +159,12 @@ export function PlayerDetailScreen({
             <PlayerShowcase
               template={template}
               framing={faceView ? 'FACE' : 'FULL'}
-              kit={{
-                primary: club?.primary ?? '#14532d',
-                secondary: club?.secondary ?? '#ffffff',
+              lowFallback="FULL"
+              kit={club ? clubKit(club, awayKit) : {
+                primary: '#14532d',
+                secondary: '#ffffff',
                 shorts: '#0f172a',
-                socks: club?.primary ?? '#14532d',
+                socks: '#14532d',
               }}
               shirtNumber={(profile.startingXI.indexOf(instanceId) >= 0 ? profile.startingXI.indexOf(instanceId) : profile.substitutes.indexOf(instanceId)) + 1 || 9}
               height={228}
@@ -177,6 +179,14 @@ export function PlayerDetailScreen({
               className="mb-2 w-full rounded-lg border border-[var(--gold)]/50 bg-black/40 px-3 py-2 text-[12px] font-bold uppercase tracking-widest text-[var(--gold)]"
             >
               {faceView ? t('player.fullBody') : t('player.faceCloseup')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAwayKit((v) => !v)}
+              aria-pressed={awayKit}
+              className="mb-2 w-full rounded-lg border border-[var(--border)] bg-black/40 px-3 py-2 text-[12px] font-bold uppercase tracking-widest text-white"
+            >
+              {awayKit ? t('player.kitHome') : t('player.kitAway')}
             </button>
           </div>
           <button

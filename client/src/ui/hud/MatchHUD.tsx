@@ -58,6 +58,9 @@ export interface MatchHudProps {
   onPause: () => void;
   paused: boolean;
   trainingMode: boolean;
+  /** FC Mobile formation tag, e.g. "4-4-2 Holding" — top-right pill. */
+  formationTag?: string;
+  onFormationTap?: () => void;
 }
 
 const MENTALITY_PILLS: { id: Mentality; label: string }[] = [
@@ -184,6 +187,7 @@ export function MatchHUD(props: MatchHudProps) {
     redsHome, redsAway, mentality, onMentality, showMentality,
     activeName, activeRole, activeStamina, shotPower, charging,
     banner, advantageSec, varActive, commentary, onPause, paused, trainingMode,
+    formationTag, onFormationTap,
   } = props;
   // Cycle-2 switch flash: PLAYER_SWITCHED drives a name-tag flash that
   // lives ~1.4 s; MATCH_UP drives the contain chip while the user's man
@@ -216,46 +220,44 @@ export function MatchHUD(props: MatchHudProps) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
-      {/* Top-left broadcast scoreboard */}
-      <div className="absolute left-2 top-2 overflow-hidden rounded-md shadow-lg" role="status" aria-label={t('hud.scoreboard')}>
-        <div className="flex items-stretch bg-black/75 backdrop-blur-sm">
-          <div className="flex items-center gap-1.5 py-1 pl-1.5 pr-2">
+      {/* Top-left broadcast scoreboard — FC Mobile white pill: black text
+          on white, club crests, and the bright-green clock chip. */}
+      <div className="absolute left-2 top-[3.4rem]" role="status" aria-label={t('hud.scoreboard')}>
+        <div className="flex items-stretch overflow-hidden rounded-md shadow-lg">
+          <div className="flex items-center gap-1.5 bg-white py-1 pl-1.5 pr-2 text-black">
             <ClubBadge club={homeClub} />
             <span className="font-display text-base font-bold tracking-wider">{homeClub.abbr}</span>
             <RedPips count={redsHome} side={homeClub.name} />
           </div>
-          <div className="tnum flex items-center bg-white/10 px-2 font-display text-xl font-bold">
+          <div className="tnum flex items-center bg-white px-1.5 font-display text-xl font-bold text-black">
             {trainingMode ? '—' : `${scoreHome} – ${scoreAway}`}
           </div>
-          <div className="flex items-center gap-1.5 py-1 pl-2 pr-1.5">
+          <div className="flex items-center gap-1.5 bg-white py-1 pl-2 pr-1.5 text-black">
             <span className="font-display text-base font-bold tracking-wider">{awayClub.abbr}</span>
             <RedPips count={redsAway} side={awayClub.name} />
             <ClubBadge club={awayClub} />
           </div>
-          <div className="tnum flex flex-col items-center justify-center bg-[var(--accent)] px-2 py-0.5 text-[#0a120c]">
-            <span className="font-display text-base font-bold leading-none">
+          <div className="tnum flex items-center justify-center px-2.5 py-0.5 text-black" style={{ background: '#7ed321' }}>
+            <span className="font-display text-lg font-bold leading-none">
               {trainingMode ? 'TRN' : `${minute}'`}
               {!trainingMode && addedMinutes > 0 ? `+${addedMinutes}` : ''}
             </span>
-            <span className="text-[9px] font-bold uppercase leading-tight tracking-wider">
-              {trainingMode ? t('hud.practice') : periodText}
-            </span>
           </div>
         </div>
-        <div className="flex h-1">
+        <div className="flex h-1 overflow-hidden rounded-b-md">
           <span className="flex-1" style={{ background: homeClub.primary }} />
           <span className="flex-1" style={{ background: awayClub.primary }} />
         </div>
         {!trainingMode && stateLabel && (
-          <p className="bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/75 backdrop-blur-sm">
-            {stateLabel}
+          <p className="mt-1 inline-block rounded bg-black/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-white/80 backdrop-blur-sm">
+            {stateLabel} · {periodText}
           </p>
         )}
       </div>
 
       {/* Top-center mentality quick-switcher */}
       {showMentality && (
-        <div className="pointer-events-auto absolute left-1/2 top-2 flex -translate-x-1/2 overflow-hidden rounded-full border border-white/20 bg-black/70 shadow-lg backdrop-blur-sm" role="group" aria-label="Team mentality quick switch">
+        <div className="pointer-events-auto absolute left-1/2 top-[3.4rem] flex -translate-x-1/2 overflow-hidden rounded-full border border-white/20 bg-black/70 shadow-lg backdrop-blur-sm" role="group" aria-label="Team mentality quick switch">
           {MENTALITY_PILLS.map((p) => (
             <button
               key={p.id}
@@ -275,18 +277,33 @@ export function MatchHUD(props: MatchHudProps) {
         </div>
       )}
 
-      {/* Pause button */}
+      {/* Top-right formation tag pill (FC Mobile: "← 4-4-2 Holding ⌄") —
+          tapping it opens the mentality switcher. */}
+      {formationTag && (
+        <button
+          type="button"
+          onClick={onFormationTap}
+          aria-label={`Formation and game plan: ${formationTag}. Tap to switch mentality.`}
+          className="pointer-events-auto absolute right-2 top-[3.4rem] flex items-center gap-1.5 rounded-full bg-black/70 py-1.5 pl-2.5 pr-3 shadow-lg backdrop-blur-sm"
+        >
+          <span aria-hidden className="text-[11px] text-white/70">←</span>
+          <span className="font-display text-[13px] font-bold tracking-wide text-white">{formationTag}</span>
+          <span aria-hidden className="text-[10px] text-white/70">⌄</span>
+        </button>
+      )}
+
+      {/* Pause button — under the formation pill */}
       <button
         type="button"
         onClick={onPause}
         aria-label={paused ? 'Resume match' : 'Pause match — statistics, substitutions and settings'}
-        className="pointer-events-auto absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
+        className="pointer-events-auto absolute right-2 top-[5.9rem] flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
       >
         {paused ? '▶' : '❚❚'}
       </button>
 
       {/* Event banners + advantage / VAR badges */}
-      <div className="absolute inset-x-0 top-14 flex flex-col items-center gap-1.5 px-3 sm:top-16">
+      <div className="absolute inset-x-0 top-[6.9rem] flex flex-col items-center gap-1.5 px-3 sm:top-[7.4rem]">
         {banner && bannerStyle && (
           <div
             key={banner.id}

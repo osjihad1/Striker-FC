@@ -30,7 +30,7 @@ function makeGrassCanvas(mode: 'albedo' | 'bump' | 'rough'): HTMLCanvasElement {
   for (let i = 0; i < stripes; i += 1) {
     const x0 = (i / stripes) * TEX_W;
     const wStripe = TEX_W / stripes;
-    if (mode === 'albedo') g.fillStyle = i % 2 === 0 ? '#2e7d32' : '#35823a';
+    if (mode === 'albedo') g.fillStyle = i % 2 === 0 ? '#43a047' : '#2e7d32';
     else if (mode === 'bump') g.fillStyle = i % 2 === 0 ? '#7a7a7a' : '#858585';
     else g.fillStyle = i % 2 === 0 ? '#e8e8e8' : '#dedede';
     g.fillRect(x0, 0, wStripe + 1, TEX_H);

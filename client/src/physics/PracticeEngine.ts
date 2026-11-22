@@ -466,7 +466,7 @@ export class PracticeEngine {
       p.yaw = Math.PI / 2 - kin.facingRad;
       p.speed = kin.speed;
       p.anim = kin.slideTimer > 0 ? 'SLIDE_TACKLE'
-        : this.pendingShot && i === this.activeIndex && this.pendingShot.timer < 0.12 ? 'KICK'
+        : this.pendingShot && i === this.activeIndex && this.pendingShot.timer < 0.12 ? 'SHOOT'
         : kin.speed > 5.2 ? 'SPRINT'
         : kin.speed > 0.4 ? 'JOG'
         : 'IDLE';

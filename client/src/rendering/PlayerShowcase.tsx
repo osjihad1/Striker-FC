@@ -1,30 +1,42 @@
 // Striker FC — rendering/PlayerShowcase.tsx
-// The 3D player showcase: the real smooth PlayerRig on a lit podium,
-// slowly rotating under stadium lights, cycling match animations (idle →
-// jog → kick → fist-pump celebration) with a paneled ball at its feet.
-// Used in the Lobby hero (the captain) and in Player Detail, so the new
-// human-shaped model is the first thing the manager sees — not a flat
-// card. If the device refuses WebGL here, it falls back to the procedural
-// SVG portrait instead of a black box: the lobby never blanks for a
-// decorative canvas.
+// The 3D player showcase: the real PlayerRig on a lit podium, slowly
+// rotating under stadium lights, cycling match animations (idle with the
+// foot resting on the ball → jog → SHOOT → the player's own celebration)
+// with a paneled ball at its feet. Used in the Lobby hero (the captain)
+// and in Player Detail, so the human-shaped model is the first thing the
+// manager sees — not a flat card. If the device refuses WebGL here, it
+// falls back to the procedural SVG portrait instead of a black box: the
+// lobby never blanks for a decorative canvas.
+//
+// Realistic-models pass (spec §4.2/§4.3): the showcase builds the rig at
+// the HERO detail tier (LOW phones fall back per `lowFallback`), the
+// camera pulled back to 4.35 m for the taller new silhouette, and the
+// cycle shows the SHOOT state — shooting is what the user judges.
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { PlayerTemplate } from '../core/types';
-import { buildPlayerRig, type KitColors } from './PlayerRig';
+import { buildPlayerRig, isSharedRigMaterial, type KitColors, type RigDetail } from './PlayerRig';
 import { PlayerAnimator, type AnimState } from './PlayerAnimator';
 import { settingsStore } from '../store/useSettingsStore';
 import { BallRenderer } from './BallRenderer';
 import { AthletePortrait } from '../ui/components/PlayerCard';
 
-const CYCLE: { state: AnimState; holdSec: number }[] = [
-  { state: 'IDLE', holdSec: 2.4 },
-  { state: 'JOG', holdSec: 2.6 },
-  { state: 'KICK', holdSec: 1.4 },
-  { state: 'CELEBRATE_FIST_PUMP', holdSec: 2.4 },
-];
+/** The showcase cycle (spec §2.6.5): idle → jog → SHOOT → the player's
+ *  own celebration. KICK stays in the cycle only for SIU celebrators. */
+function cycleFor(template: PlayerTemplate): { state: AnimState; holdSec: number }[] {
+  const celebration = (template.celebration ?? 'CELEBRATE_FIST_PUMP') as AnimState;
+  const cycle: { state: AnimState; holdSec: number }[] = [
+    { state: 'IDLE', holdSec: 2.4 },
+    { state: 'JOG', holdSec: 2.6 },
+    { state: 'SHOOT', holdSec: 1.6 },
+  ];
+  if (celebration === 'CELEBRATE_SIU') cycle.push({ state: 'KICK', holdSec: 1.4 });
+  cycle.push({ state: celebration, holdSec: 2.8 });
+  return cycle;
+}
 
 export function PlayerShowcase({
-  template, kit, shirtNumber, height = 300, label, framing = 'FULL',
+  template, kit, shirtNumber, height = 300, label, framing = 'FULL', lowFallback = 'LOW',
 }: {
   template: PlayerTemplate;
   kit: KitColors;
@@ -34,6 +46,9 @@ export function PlayerShowcase({
   /** Epic P0-4: 'FACE' frames a slow-orbit close-up on the head so the
    *  player's face morphs / beard / hair are actually visible. */
   framing?: 'FULL' | 'FACE';
+  /** Which rig tier a LOW-graphics phone gets here: the lobby degrades
+   *  to LOW, the player-detail stage keeps FULL (spec §4.3.5). */
+  lowFallback?: 'LOW' | 'FULL';
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -44,8 +59,8 @@ export function PlayerShowcase({
   const numberRef = useRef(shirtNumber);
   numberRef.current = shirtNumber;
   // Rebuild the stage when the showcased player changes (captain swaps,
-  // a different card opened in Player Detail).
-  const stageKey = `${template.id}:${shirtNumber}:${kit.primary}:${kit.shorts}:${framing}`;
+  // a different card opened in Player Detail, home/away kit toggle).
+  const stageKey = `${template.id}:${shirtNumber}:${kit.primary}:${kit.secondary}:${kit.shorts}:${framing}:${lowFallback}`;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -80,8 +95,10 @@ export function PlayerShowcase({
       camera.position.set(0.3, 1.95, 1.2);
       camera.lookAt(0, 1.9, 0);
     } else {
-      camera.position.set(0.55, 1.38, 3.95);
-      camera.lookAt(0, 0.95, 0);
+      // Pulled back 10% (spec §4.2.2): the new rig reads ~0.06 m taller
+      // with the trapezius, hair volume and lathe boots.
+      camera.position.set(0.55, 1.38, 4.35);
+      camera.lookAt(0, 0.92, 0);
     }
 
     // Stadium lighting: cool key floodlight, warm rim, soft fill + hemi.
@@ -125,13 +142,18 @@ export function PlayerShowcase({
     grass.receiveShadow = true;
     scene.add(grass);
 
-    const rig = buildPlayerRig(tpl.appearance, kitRef.current, numberRef.current, tpl.shortName, lowTier ? 'LOW' : 'FULL');
+    const detail: RigDetail = lowTier ? lowFallback : 'HERO';
+    const rig = buildPlayerRig(tpl.appearance, kitRef.current, numberRef.current, tpl.shortName, detail);
     rig.setShadowVisible(false); // the podium shadow comes from the key light
     scene.add(rig.group);
     const animator = new PlayerAnimator(tpl.preferredFoot);
+    animator.ballRest = true; // idle = foot resting on the ball (spec §2.2)
     const ball = new BallRenderer();
-    ball.setPosition(0.42, 0.11, 0.34);
-    scene.add(ball.group);
+    // The ball rides WITH the rig (front-right of the feet) so the
+    // resting foot stays on it while the podium turntable rotates.
+    ball.setPosition(0.2, 0.11, 0.3);
+    rig.group.add(ball.group);
+    const cycle = cycleFor(tpl);
 
     const resize = new ResizeObserver(() => {
       const w = host.clientWidth || 300;
@@ -154,22 +176,24 @@ export function PlayerShowcase({
       // Animation cycle: hold each state, then advance.
       let acc = 0;
       let idx = 0;
-      const cycleTotal = CYCLE.reduce((a, c) => a + c.holdSec, 0);
+      const cycleTotal = cycle.reduce((a, c) => a + c.holdSec, 0);
       const tInCycle = elapsed % cycleTotal;
-      for (let i = 0; i < CYCLE.length; i += 1) {
-        if (tInCycle < acc + CYCLE[i]!.holdSec) { idx = i; break; }
-        acc += CYCLE[i]!.holdSec;
+      for (let i = 0; i < cycle.length; i += 1) {
+        if (tInCycle < acc + cycle[i]!.holdSec) { idx = i; break; }
+        acc += cycle[i]!.holdSec;
         idx = i;
       }
-      const state = CYCLE[idx]!.state;
+      const state = cycle[idx]!.state;
       if (state === 'KICK' && animator.state !== 'KICK') animator.triggerKick();
-      else if (state !== 'KICK') animator.setState(state);
+      else if (state === 'SHOOT' && animator.state !== 'SHOOT') animator.triggerShoot();
+      else if (state !== 'KICK' && state !== 'SHOOT') animator.setState(state);
       animator.update(rig, dt, state === 'JOG' ? 3.4 : 0);
       if (framing === 'FACE') {
         // Slow orbit around the head; the rig holds still so the face
         // stays framed (head world height ≈ 1.9 m on the podium rig).
+        // The orbit slowed (spec §4.2.2): the face has detail worth seeing.
         rig.group.rotation.y = 0.15;
-        const a = elapsed * 0.35;
+        const a = elapsed * 0.25;
         camera.position.set(Math.sin(a) * 0.62, 1.95 + Math.sin(elapsed * 0.22) * 0.05, Math.cos(a) * 1.18);
         camera.lookAt(0, 1.9, 0);
       } else {
@@ -207,6 +231,9 @@ export function PlayerShowcase({
         if (m.geometry) m.geometry.dispose();
         const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
         for (const mat of mats) {
+          // Shared rig materials (the atlases!) belong to every rig —
+          // disposing one here would break the match scene's textures.
+          if (isSharedRigMaterial(mat)) continue;
           (mat as THREE.MeshStandardMaterial).map?.dispose();
           mat.dispose();
         }

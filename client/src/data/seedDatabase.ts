@@ -300,22 +300,25 @@ export const SEED_MARQUEE_PLAYERS: MarqueeSeed[] = [
 // ---------------------------------------------------------------------------
 
 export const REAL_CLUBS: Club[] = [
-  { id: 'real_madrid', name: 'Real Madrid', abbr: 'RMA', primary: '#f8fafc', secondary: '#febe10', league: 'La Liga' },
-  { id: 'fc_barcelona', name: 'FC Barcelona', abbr: 'BAR', primary: '#a50044', secondary: '#004d98', league: 'La Liga' },
-  { id: 'man_city', name: 'Manchester City', abbr: 'MCI', primary: '#6cabdd', secondary: '#1c2c5b', league: 'Premier League' },
-  { id: 'liverpool', name: 'Liverpool', abbr: 'LIV', primary: '#c8102e', secondary: '#f0b323', league: 'Premier League' },
-  { id: 'bayern_munich', name: 'Bayern Munich', abbr: 'FCB', primary: '#dc052d', secondary: '#f8fafc', league: 'Bundesliga' },
-  { id: 'psg', name: 'Paris Saint-Germain', abbr: 'PSG', primary: '#004170', secondary: '#da291c', league: 'Ligue 1' },
-  { id: 'arsenal', name: 'Arsenal', abbr: 'ARS', primary: '#ef0107', secondary: '#f8fafc', league: 'Premier League' },
-  { id: 'chelsea', name: 'Chelsea', abbr: 'CHE', primary: '#034694', secondary: '#f8fafc', league: 'Premier League' },
-  { id: 'man_utd', name: 'Manchester United', abbr: 'UTD', primary: '#da291c', secondary: '#fbe122', league: 'Premier League' },
-  { id: 'inter_milan', name: 'Inter Milan', abbr: 'INT', primary: '#0068a8', secondary: '#020617', league: 'Serie A' },
-  { id: 'ac_milan', name: 'AC Milan', abbr: 'ACM', primary: '#fb090b', secondary: '#111827', league: 'Serie A' },
-  { id: 'juventus', name: 'Juventus', abbr: 'JUV', primary: '#111827', secondary: '#f8fafc', league: 'Serie A' },
-  { id: 'dortmund', name: 'Borussia Dortmund', abbr: 'BVB', primary: '#fde100', secondary: '#111827', league: 'Bundesliga' },
-  { id: 'atletico_madrid', name: 'Atletico Madrid', abbr: 'ATM', primary: '#cb3524', secondary: '#f8fafc', league: 'La Liga' },
-  { id: 'al_nassr', name: 'Al Nassr', abbr: 'NSR', primary: '#ffdd00', secondary: '#0038a8', league: 'Saudi Pro League' },
-  { id: 'inter_miami', name: 'Inter Miami', abbr: 'MIA', primary: '#f7b5cd', secondary: '#111827', league: 'MLS' },
+  // Realistic-models pass (spec §1.6): kitPattern / collarStyle / sleeveColor
+  // drive the jersey-atlas art — stripes, bands and white sleeves are what
+  // make a real club's shirt read as that club's shirt.
+  { id: 'real_madrid', name: 'Real Madrid', abbr: 'RMA', primary: '#f8fafc', secondary: '#febe10', league: 'La Liga', kitPattern: 'SOLID', collarStyle: 'CREW' },
+  { id: 'fc_barcelona', name: 'FC Barcelona', abbr: 'BAR', primary: '#a50044', secondary: '#004d98', league: 'La Liga', kitPattern: 'STRIPES_VERTICAL' },
+  { id: 'man_city', name: 'Manchester City', abbr: 'MCI', primary: '#6cabdd', secondary: '#1c2c5b', league: 'Premier League', kitPattern: 'SOLID' },
+  { id: 'liverpool', name: 'Liverpool', abbr: 'LIV', primary: '#c8102e', secondary: '#f0b323', league: 'Premier League', kitPattern: 'SOLID' },
+  { id: 'bayern_munich', name: 'Bayern Munich', abbr: 'FCB', primary: '#dc052d', secondary: '#f8fafc', league: 'Bundesliga', kitPattern: 'SOLID' },
+  { id: 'psg', name: 'Paris Saint-Germain', abbr: 'PSG', primary: '#004170', secondary: '#da291c', league: 'Ligue 1', kitPattern: 'CHEST_BAND' },
+  { id: 'arsenal', name: 'Arsenal', abbr: 'ARS', primary: '#ef0107', secondary: '#f8fafc', league: 'Premier League', kitPattern: 'SOLID', sleeveColor: '#f8fafc' },
+  { id: 'chelsea', name: 'Chelsea', abbr: 'CHE', primary: '#034694', secondary: '#f8fafc', league: 'Premier League', kitPattern: 'SOLID' },
+  { id: 'man_utd', name: 'Manchester United', abbr: 'UTD', primary: '#da291c', secondary: '#fbe122', league: 'Premier League', kitPattern: 'SOLID' },
+  { id: 'inter_milan', name: 'Inter Milan', abbr: 'INT', primary: '#0068a8', secondary: '#020617', league: 'Serie A', kitPattern: 'STRIPES_VERTICAL' },
+  { id: 'ac_milan', name: 'AC Milan', abbr: 'ACM', primary: '#fb090b', secondary: '#111827', league: 'Serie A', kitPattern: 'STRIPES_VERTICAL' },
+  { id: 'juventus', name: 'Juventus', abbr: 'JUV', primary: '#111827', secondary: '#f8fafc', league: 'Serie A', kitPattern: 'STRIPES_VERTICAL' },
+  { id: 'dortmund', name: 'Borussia Dortmund', abbr: 'BVB', primary: '#fde100', secondary: '#111827', league: 'Bundesliga', kitPattern: 'SOLID' },
+  { id: 'atletico_madrid', name: 'Atletico Madrid', abbr: 'ATM', primary: '#cb3524', secondary: '#f8fafc', league: 'La Liga', kitPattern: 'STRIPES_VERTICAL' },
+  { id: 'al_nassr', name: 'Al Nassr', abbr: 'NSR', primary: '#ffdd00', secondary: '#0038a8', league: 'Saudi Pro League', kitPattern: 'SOLID' },
+  { id: 'inter_miami', name: 'Inter Miami', abbr: 'MIA', primary: '#f7b5cd', secondary: '#111827', league: 'MLS', kitPattern: 'SOLID' },
 ];
 
 export const NEW_ORIGINAL_CLUBS: Club[] = [

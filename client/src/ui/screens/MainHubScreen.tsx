@@ -27,17 +27,24 @@ import { ALL_CLUBS } from '../../data/Clubs';
 import { DIVISIONS, STARS_TO_PROMOTE, divisionIndexOf, divisionName, h2hSeasonDaysLeft, h2hWinCoins } from '../../modes/HeadToHeadMode';
 import { SKILL_GAMES } from '../../modes/SkillGamesMode';
 import { PlayerCard } from '../components/PlayerCard';
+import { ClubCrestArt } from '../components/ClubCrestArt';
+import { getFormationById } from '../../data/Formations';
 import { PlayerShowcase } from '../../rendering/PlayerShowcase';
+import heroStarUrl from '../../assets/hero-star.jpg';
+import packGoldUrl from '../../assets/pack-gold.jpg';
 
 function ClubCrest({ profile, size = 46 }: { profile: SaveProfile; size?: number }) {
   return (
-    <svg viewBox="0 0 100 110" width={size} height={size * 1.1} role="img" aria-label={`${profile.clubName} crest`} className="shrink-0 drop-shadow">
-      <path d="M6 6 H94 V62 C94 86 74 99 50 106 C26 99 6 86 6 62 Z" fill={profile.clubPrimaryColor} stroke="rgba(255,255,255,0.55)" strokeWidth={3} />
-      <path d="M6 34 H94" stroke={profile.clubSecondaryColor} strokeWidth={7} />
-      <text x={50} y={72} textAnchor="middle" fontFamily="Barlow Condensed, sans-serif" fontWeight={700} fontSize={30} fill={profile.clubSecondaryColor}>
-        {profile.clubAbbr}
-      </text>
-    </svg>
+    <span className="shrink-0">
+      <ClubCrestArt
+        clubId="user_club"
+        primary={profile.clubPrimaryColor}
+        secondary={profile.clubSecondaryColor}
+        abbr={profile.clubAbbr}
+        name={profile.clubName}
+        size={size}
+      />
+    </span>
   );
 }
 
@@ -160,12 +167,6 @@ export function MainHubScreen(props: MainHubProps) {
   const captainClub = captain?.template
     ? ALL_CLUBS.find((c) => c.id === captain.template!.clubId)
     : undefined;
-  const captainKit = {
-    primary: captainClub?.primary ?? profile.clubPrimaryColor,
-    secondary: captainClub?.secondary ?? profile.clubSecondaryColor,
-    shorts: '#0f172a',
-    socks: captainClub?.primary ?? profile.clubPrimaryColor,
-  };
   const topPlayers = [...xi]
     .filter((r) => r.template && r.card)
     .sort((a, b) => (b.slotOvr ?? 0) - (a.slotOvr ?? 0))
@@ -410,88 +411,144 @@ export function MainHubScreen(props: MainHubProps) {
         );
       })()}
 
-      {/* ── Hero: floodlit stadium, 3D captain showcase, PLAY ── */}
-      <div
-        className="relative mt-3 overflow-hidden rounded-3xl border border-[var(--gold)]/25 shadow-2xl"
-        style={{
-          background:
-            'radial-gradient(90% 60% at 85% -10%, rgba(245,197,66,0.28) 0%, transparent 55%),'
-            + 'radial-gradient(70% 55% at 8% -12%, rgba(163,230,53,0.22) 0%, transparent 55%),'
-            + 'linear-gradient(160deg, #0a1a33 0%, #081226 52%, #04140b 100%)',
-        }}
-      >
-        {/* crowd-dot texture */}
+      {/* ── Hero (visual bible §2.1): full-bleed photo art, the teal TEAM
+          OF THE SEASON event banner, a gold MY TEAM panel and PLAY.
+          No plain backgrounds, no empty space — the photo IS the lobby. ── */}
+      <div className="relative mt-3 overflow-hidden rounded-3xl border border-white/15 shadow-2xl">
+        <img src={heroStarUrl} alt="" className="absolute inset-0 h-full w-full object-cover object-[22%_30%]" />
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.13]"
-          style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.85) 1px, transparent 1.4px)', backgroundSize: '9px 9px' }}
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(96deg, rgba(4,10,24,0.10) 0%, rgba(4,10,24,0.30) 42%, rgba(4,10,24,0.86) 74%, rgba(4,10,24,0.95) 100%), linear-gradient(0deg, rgba(4,10,24,0.88) 0%, transparent 46%)' }}
         />
-        <div className="relative flex items-stretch gap-1 px-4 pt-4 sm:px-5">
-          <div className="min-w-0 flex-1 pb-1 pt-1">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-black/50 px-2.5 py-1.5 text-center ring-1 ring-[var(--gold)]/50">
-                <p className="tnum font-display text-[26px] font-bold leading-none text-[var(--gold)]">{teamOvr}</p>
-                <p className="text-[8.5px] font-black uppercase tracking-widest text-white/70">{t('hub.teamOvr')}</p>
-              </div>
-              <div className="rounded-xl bg-black/50 px-2.5 py-1.5 ring-1 ring-white/15">
-                <p className="font-display text-[15px] font-bold uppercase leading-tight text-white">{divisionName(profile.h2hDivision)}</p>
-                <p className="text-[8.5px] font-black uppercase tracking-widest text-white/60">{t('hub.division')} · {formatNumber(profile.h2hStars)}/{formatNumber(STARS_TO_PROMOTE)}★</p>
-              </div>
+        <div className="relative flex min-h-[308px] flex-col px-4 py-4 sm:px-5">
+          {/* gold MY TEAM panel, top-right over the art */}
+          <div className="ml-auto flex items-center gap-3 rounded-2xl px-3.5 py-2.5 shadow-xl ring-1 ring-black/25" style={{ background: 'linear-gradient(140deg, #d9c07a 0%, #b89b4e 55%, #8f7434 100%)' }}>
+            <div className="text-right">
+              <p className="text-[9px] font-black uppercase tracking-[0.24em] text-[#3a2c05]">{t('nav.myTeam')}</p>
+              <p className="font-display text-[17px] font-bold uppercase leading-none text-[#241a02]">
+                {getFormationById(profile.activeFormationId)?.name ?? '4-3-3'}
+              </p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#4a3a08]">
+                {divisionName(profile.h2hDivision)} · {formatNumber(profile.h2hStars)}/{formatNumber(STARS_TO_PROMOTE)}★
+              </p>
             </div>
-            {captain?.template ? (
-              <>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.28em] text-[var(--accent)]">{t('hub.yourCaptain')}</p>
-                <p className="font-display mt-0.5 text-[30px] font-bold uppercase leading-[0.95] tracking-wide text-white sm:text-4xl">
-                  {captain.template.name}
-                </p>
-                <p className="mt-1 text-[13px] font-semibold text-white/75">
-                  {captain.slotOvr} OVR · {captain.role} · {captainClub?.abbr ?? ''} {t('hub.trainCaptainHint')}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="mt-3 text-[10px] font-black uppercase tracking-[0.28em] text-[var(--accent)]">{t('hub.yourClub')}</p>
-                <p className="font-display mt-0.5 text-[34px] font-bold uppercase leading-none tracking-wide text-white">{t('hub.buildYourXi')}</p>
-                <p className="mt-1 text-[13px] font-semibold text-white/75">{t('hub.noCaptainYet')}</p>
-              </>
-            )}
-            <p className="mt-2 hidden max-w-[300px] text-xs leading-relaxed text-white/55 sm:block">
-              {t('hub.heroBlurb')}
-            </p>
+            <div className="rounded-xl bg-black/35 px-2.5 py-1 text-center">
+              <p className="tnum font-display text-[26px] font-bold leading-none text-[var(--gold)]">{teamOvr}</p>
+              <p className="text-[8px] font-black uppercase tracking-widest text-white/75">{t('hub.teamOvr')}</p>
+            </div>
           </div>
-          <div className="w-[44%] max-w-[230px] shrink-0 self-end">
-            {captain?.template ? (
-              <PlayerShowcase template={captain.template} kit={captainKit} shirtNumber={captain.index + 1} height={248} />
-            ) : (
-              <div className="flex h-[248px] items-center justify-center"><ClubCrest profile={profile} size={92} /></div>
-            )}
-          </div>
-        </div>
-        <div className="relative flex gap-2 px-4 pb-4 sm:px-5">
-          <button
-            type="button"
-            onClick={onPlay}
-            className="play-glow font-display flex-1 rounded-2xl bg-[var(--accent)] px-4 py-3.5 text-[26px] font-bold uppercase tracking-[0.18em] text-[#0a120c]"
-          >
-            ▶ {t('hub.play')}
-          </button>
-          <button
-            type="button"
-            onClick={onQuickMatch}
-            className="font-display rounded-2xl border border-white/30 bg-white/10 px-4 py-3.5 text-lg font-bold uppercase tracking-wider text-white backdrop-blur"
-          >
-            {t('hub.quickMatch')}
-          </button>
-          {captain?.card && (
+
+          <div className="mt-auto">
+            {/* teal event banner — the live event billboard */}
             <button
               type="button"
-              onClick={() => onInspect(captain.card!.instanceId)}
-              className="font-display hidden rounded-2xl border border-[var(--gold)]/50 bg-black/40 px-4 py-3.5 text-lg font-bold uppercase tracking-wider text-[var(--gold)] min-[480px]:block"
+              onClick={onEvents}
+              className="group relative block w-full max-w-[520px] overflow-hidden rounded-2xl text-left shadow-2xl ring-1 ring-white/25 sm:w-[62%]"
+              style={{ background: 'linear-gradient(115deg, #2de1c2 0%, #00d9c0 45%, #00a88f 100%)' }}
+              aria-label={`${t('events.totsTitle')} — ${t('hub.liveEvents')}`}
             >
-              Captain
+              <img src={packGoldUrl} alt="" aria-hidden className="absolute -right-8 -top-10 h-44 w-auto rotate-6 opacity-90 drop-shadow-2xl" />
+              <span className="relative block px-4 py-3.5">
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#04382f]">{t('events.totsKicker')} · {t('hub.liveEvents')}</span>
+                <span className="font-display block text-[30px] font-bold uppercase leading-[0.95] tracking-wide text-white sm:text-[36px]" style={{ textShadow: '0 2px 12px rgba(0,60,50,0.45)' }}>
+                  {t('events.totsTitle')}
+                </span>
+                <span className="mt-1.5 inline-flex items-center gap-2 rounded-full bg-black/35 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-white">
+                  {claimableQuests.length > 0 ? t('hub.bannerRewardsToClaim', { n: claimableQuests.length }) : t('hub.bannerEventsLive')}
+                  <span aria-hidden>→</span>
+                </span>
+              </span>
             </button>
-          )}
+            {captain?.template && (
+              <p className="mt-2.5 text-[12px] font-semibold text-white/85" style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}>
+                <span className="font-black uppercase tracking-[0.22em] text-[var(--teal)]">{t('hub.yourCaptain')}</span>{' '}
+                {captain.template.name} · {captain.slotOvr} OVR · {captain.role}
+                {captainClub ? ` · ${captainClub.abbr}` : ''}
+              </p>
+            )}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={onPlay}
+                className="play-glow font-display flex-1 rounded-2xl bg-[var(--accent)] px-4 py-3.5 text-[26px] font-bold uppercase tracking-[0.18em] text-[#0a120c]"
+              >
+                ▶ {t('hub.play')}
+              </button>
+              <button
+                type="button"
+                onClick={onQuickMatch}
+                className="font-display rounded-2xl border border-white/35 bg-black/45 px-4 py-3.5 text-lg font-bold uppercase tracking-wider text-white backdrop-blur"
+              >
+                {t('hub.quickMatch')}
+              </button>
+              {captain?.card && (
+                <button
+                  type="button"
+                  onClick={() => onInspect(captain.card!.instanceId)}
+                  className="font-display hidden rounded-2xl border border-[var(--gold)]/60 bg-black/50 px-4 py-3.5 text-lg font-bold uppercase tracking-wider text-[var(--gold)] min-[480px]:block"
+                >
+                  Captain
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+      </div>
+
+      {/* ── Live status tiles: claim badges + countdowns, all real state ── */}
+      <div className="mt-3 grid grid-cols-2 gap-2 min-[720px]:grid-cols-4" aria-label="Live status">
+        <button type="button" onClick={onEvents} className="relative overflow-hidden rounded-2xl border border-white/12 bg-[#0b1e3a] px-3.5 py-3 text-left">
+          <span aria-hidden className="absolute inset-y-0 right-0 w-16 opacity-25" style={{ background: 'linear-gradient(90deg, transparent, #2de1c2)' }} />
+          <span className="relative block text-[9.5px] font-black uppercase tracking-[0.24em] text-[var(--teal)]">{t('hub.liveEvents')}</span>
+          <span className="font-display relative mt-0.5 block text-[19px] font-bold uppercase leading-tight text-white">
+            {claimableQuests.length > 0 ? t('hub.bannerRewardsToClaim', { n: claimableQuests.length }) : t('hub.bannerEventsLive')}
+          </span>
+          <span className="tnum relative mt-0.5 block text-[11px] font-semibold text-white/65">
+            {t('hub.bannerReset', { time: formatCountdown(msUntilDailyReset(nowMs)) })}
+          </span>
+          {claimableQuests.length > 0 && (
+            <span className="tnum absolute right-2.5 top-2.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#c6f135] px-1.5 font-display text-[12px] font-bold text-[#111827]">
+              {claimableQuests.length}
+            </span>
+          )}
+        </button>
+        <button type="button" onClick={onLaunchH2h} className="relative overflow-hidden rounded-2xl border border-white/12 bg-[#131b33] px-3.5 py-3 text-left">
+          <span className="block text-[9.5px] font-black uppercase tracking-[0.24em] text-[var(--gold)]">{t('hub.rivals')}</span>
+          <span className="font-display mt-0.5 block text-[19px] font-bold uppercase leading-tight text-white">{divisionName(profile.h2hDivision)}</span>
+          <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/50">
+            <span className="block h-full rounded-full bg-[var(--gold)]" style={{ width: `${Math.min(100, (profile.h2hStars / STARS_TO_PROMOTE) * 100)}%` }} />
+          </span>
+          <span className="tnum mt-1 block text-[11px] font-semibold text-white/65">
+            {formatNumber(profile.h2hStars)}/{formatNumber(STARS_TO_PROMOTE)} ★
+          </span>
+        </button>
+        <button type="button" onClick={onStore} className="relative overflow-hidden rounded-2xl border border-white/12 bg-[#0d2430] px-3.5 py-3 text-left">
+          <span className="block text-[9.5px] font-black uppercase tracking-[0.24em] text-[var(--teal)]">{t('store.dailyResourcePack')}</span>
+          <span className="font-display mt-0.5 block text-[19px] font-bold uppercase leading-tight text-white">
+            {freeMs <= 0 ? t('hub.bannerFreeReady') : t('hub.bannerFree')}
+          </span>
+          <span className="tnum mt-0.5 block text-[11px] font-semibold text-white/65">
+            {freeMs <= 0 ? t('hub.bannerFreeReadySub') : formatCountdown(freeMs)}
+          </span>
+          {freeMs <= 0 && (
+            <span className="absolute right-2.5 top-2.5 rounded-full bg-[#c6f135] px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-[#111827]">
+              {t('hub.claim')}
+            </span>
+          )}
+        </button>
+        <button type="button" onClick={onQuests} className="relative overflow-hidden rounded-2xl border border-white/12 bg-[#1d1440] px-3.5 py-3 text-left">
+          <span className="block text-[9.5px] font-black uppercase tracking-[0.24em] text-fuchsia-300">{t('hub.bannerPassKicker')}</span>
+          <span className="font-display mt-0.5 block text-[19px] font-bold uppercase leading-tight text-white">
+            {t('hub.passLevel', { n: passLevel })}
+          </span>
+          <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-black/50">
+            <span className="block h-full rounded-full bg-fuchsia-400" style={{ width: `${Math.min(100, (profile.seasonPassXp / 10000) * 100)}%` }} />
+          </span>
+          <span className="tnum mt-1 block text-[11px] font-semibold text-white/65">
+            {t('hub.bannerXp', { xp: profile.seasonPassXp })}
+          </span>
+        </button>
       </div>
 
       {/* ── Epic P0-1: Legends showcase — the four faces of the game, in 3D,

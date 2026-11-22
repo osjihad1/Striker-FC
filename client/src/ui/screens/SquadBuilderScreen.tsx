@@ -18,7 +18,7 @@ FIT_COLORS, FIT_LABELS, assignCardToSlot, autoBuildBestXI, clearSquadSlot, posit
 setProfileFormation, squadTeamOvr, swapSquadSlots, zoneOf, type SlotRef,
 } from '../../meta/SquadService';
 import { findCard } from '../../meta/ProgressionService';
-import { formatNumber, t } from '../../i18n/i18n';
+import { t } from '../../i18n/i18n';
 
 type SortMode = 'OVR_DESC' | 'OVR_ASC' | 'POSITION' | 'RARITY';
 const RARITY_ORDER: Record<Rarity, number> = { BRONZE: 0, SILVER: 1, GOLD: 2, ELITE: 3, MASTER: 4, LEGEND: 5 };
@@ -81,8 +81,7 @@ export function SquadBuilderScreen({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-display text-2xl font-bold uppercase tracking-wide">
-            {t('squad.myTeam')} <span className="text-[var(--dim)]">·</span>{' '}
-            <span className="tnum text-[var(--gold)]">{formatNumber(teamOvr)} OVR</span>
+            {t('squad.myTeam')} <span className="text-[var(--dim)]">· {formation.name}</span>
           </h2>
           <p className="mt-1 max-w-prose text-sm text-[var(--dim)]">
             {t('squad.intro')}
@@ -126,7 +125,7 @@ export function SquadBuilderScreen({
         </p>
       )}
 
-      <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,430px)_1fr]">
+      <div className="mt-4 grid gap-5">
         <div>
           <PitchFormationView
             profile={profile}
@@ -134,6 +133,7 @@ export function SquadBuilderScreen({
             selected={selected}
             onSelect={setSelected}
             onSwap={(a, b) => commit(swapSquadSlots(profile, a, b), t('squad.swapped'))}
+            teamOvr={teamOvr}
           />
           {selected && (
             <div className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3" aria-live="polite">

@@ -9,7 +9,7 @@ import type {
 CoreStats, FaceAppearance, PlayerTemplate, PlayStyleId, Position, Rarity, SubStats,
 } from '../core/types';
 import { positionGroup } from '../core/types';
-import { REAL_PLAYER_SEEDS, type RealPlayerSeed } from './RealPlayers';
+import { REAL_PLAYER_SEEDS, STAR_CELEBRATIONS, type RealPlayerSeed } from './RealPlayers';
 import { NEW_ORIGINAL_CLUBS, REAL_CLUBS, SEED_CLUBS, SEED_MARQUEE_PLAYERS, type MarqueeSeed } from './seedDatabase';
 
 const DB_SEED = 0x5f3759df;
@@ -188,19 +188,40 @@ function coreStatsFor(rng: () => number, position: Position, ovr: number): CoreS
   }
 }
 
+const FACE_SHAPES = ['OVAL', 'ROUND', 'SQUARE', 'LONG'] as const;
+const NOSE_SHAPES = ['STRAIGHT', 'HOOKED', 'BROAD', 'BUTTON'] as const;
+const EYE_COLORS = ['#3b2f2f', '#4a3520', '#6b4423', '#4a6fa5', '#5a7d4a'] as const;
+
 function appearanceFor(rng: () => number, position: Position): FaceAppearance {
   const heightCm = position === 'GK'
     ? randInt(rng, 186, 202)
     : position === 'CB' || position === 'ST'
       ? randInt(rng, 178, 198)
       : randInt(rng, 165, 192);
-  return {
+  const base: FaceAppearance = {
     skinTone: pick(rng, SKIN_TONES),
     hairStyle: pick(rng, HAIR_STYLES),
     hairColor: pick(rng, HAIR_COLORS),
     heightCm,
     build: pick(rng, BUILDS),
     bootColor: pick(rng, BOOT_COLORS),
+  };
+  // Realistic-models pass (spec §1.4): the new face fields are derived from
+  // a SIDE stream seeded by the values already drawn — never from the
+  // shared rng — so every pre-existing generated player's skinTone,
+  // hairStyle, heightCm, name and stats stay byte-identical.
+  let h = heightCm * 131 + base.skinTone.length * 17;
+  for (let i = 0; i < base.skinTone.length; i += 1) h = (h * 31 + base.skinTone.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < base.hairColor.length; i += 1) h = (h * 31 + base.hairColor.charCodeAt(i)) >>> 0;
+  const faceRng = mulberry32(h ^ 0xface);
+  return {
+    ...base,
+    faceShape: pick(faceRng, FACE_SHAPES),
+    noseShape: pick(faceRng, NOSE_SHAPES),
+    eyeColor: pick(faceRng, EYE_COLORS),
+    hairTexture: base.hairStyle === 'CURLY' || base.hairStyle === 'CURLY_TOP' || base.hairStyle === 'AFRO'
+      ? 'CURLY'
+      : base.hairStyle === 'DREADLOCKS' || base.hairStyle === 'BRAIDS' ? 'COILY' : 'STRAIGHT',
   };
 }
 
@@ -233,7 +254,8 @@ function marqueeToTemplate(seed: MarqueeSeed): PlayerTemplate {
  *  marquee players, plus the realWorld gate flag and national shirt number. */
 function realToTemplate(seed: RealPlayerSeed): PlayerTemplate {
   const base = marqueeToTemplate(seed);
-  return { ...base, realWorld: true, shirtNumber: seed.shirtNumber };
+  const celebration = STAR_CELEBRATIONS[seed.id];
+  return { ...base, realWorld: true, shirtNumber: seed.shirtNumber, ...(celebration ? { celebration } : {}) };
 }
 
 // ---------------------------------------------------------------------------

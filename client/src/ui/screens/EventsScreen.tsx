@@ -23,6 +23,9 @@ import { applyModeRewards, NO_FACTS } from '../../modes/ModeRewards';
 import { mulberry32 } from '../../core/math';
 import { LOGIN_MILESTONES, claimLoginMilestone, loginDayCount } from '../../meta/SeasonService';
 import { formatNumber, t } from '../../i18n/i18n';
+import packGoldUrl from '../../assets/pack-gold.jpg';
+import packBlueUrl from '../../assets/pack-blue.jpg';
+import packTealUrl from '../../assets/pack-teal.jpg';
 
 function formatCountdown(ms: number): string {
   const totalMin = Math.max(0, Math.floor(ms / 60000));
@@ -64,12 +67,12 @@ function QuestEventRow({
         </div>
         <span className="tnum text-xs font-bold text-[var(--dim)]">{formatNumber(progress.current)}/{formatNumber(quest.target)}</span>
         {progress.claimed ? (
-          <span className="rounded bg-black/40 px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide text-[var(--dim)]">{t('hub.claimed')}</span>
+          <span className="rounded-full bg-black/40 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[var(--dim)]">{t('hub.claimed')}</span>
         ) : complete ? (
           <button
             type="button"
             onClick={() => onClaim(quest)}
-            className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#0a120c]"
+            className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow"
           >
             {t('hub.claim')}
           </button>
@@ -135,6 +138,64 @@ export function EventsScreen({
       {notice && <p className="mt-3 rounded-lg border border-[var(--accent)]/50 bg-[var(--accent-dim)]/30 px-3 py-2 text-sm font-semibold text-[var(--accent)]" role="status">{notice}</p>}
       {error && <p className="mt-3 rounded-lg border border-red-400/50 bg-red-950/40 px-3 py-2 text-sm font-semibold text-red-300" role="alert">{error}</p>}
 
+      {/* Themed event heroes (visual bible §2.5): each live event carries
+          its own art direction — gold TOTS, royal-blue Dreamchasers,
+          icy Winter Fest — with a live status line and one GO action. */}
+      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+        <button
+          type="button"
+          onClick={onOpenQuests}
+          className="relative overflow-hidden rounded-2xl text-left shadow-xl ring-1 ring-[#f5c542]/50"
+          style={{ background: 'linear-gradient(120deg, #3a2a05 0%, #8a6410 52%, #d9a92c 100%)' }}
+          aria-label={`${t('events.totsTitle')} — ${t('events.goNow')}`}
+        >
+          <img src={packGoldUrl} alt="" aria-hidden className="absolute -right-6 -top-8 h-40 w-auto rotate-6 opacity-95 drop-shadow-2xl" />
+          <span className="relative block p-4">
+            <span className="text-[9.5px] font-black uppercase tracking-[0.3em] text-[#ffe9a8]">{t('events.totsKicker')}</span>
+            <span className="font-display mt-1 block text-[26px] font-bold uppercase leading-[0.95] text-white" style={{ textShadow: '0 2px 10px rgba(60,40,0,0.55)' }}>
+              {t('events.totsTitle')}
+            </span>
+            <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-white">
+              {claimable > 0 ? t('events.ready', { n: claimable }) : t('hub.bannerEventsLive')} · {t('events.goNow')} →
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenStore}
+          className="relative overflow-hidden rounded-2xl text-left shadow-xl ring-1 ring-[#7aa2ff]/50"
+          style={{ background: 'linear-gradient(120deg, #0a1440 0%, #1b2fad 58%, #2743c7 100%)' }}
+          aria-label={`${t('events.dreamTitle')} — ${t('events.goNow')}`}
+        >
+          <img src={packBlueUrl} alt="" aria-hidden className="absolute -right-4 -top-10 h-44 w-auto rotate-6 opacity-95 drop-shadow-2xl" />
+          <span className="relative block p-4">
+            <span className="text-[9.5px] font-black uppercase tracking-[0.3em] text-[#bcd2ff]">{t('events.dreamKicker')}</span>
+            <span className="font-display mt-1 block text-[26px] font-bold uppercase leading-[0.95] text-white" style={{ textShadow: '0 2px 10px rgba(0,10,60,0.6)' }}>
+              {t('events.dreamTitle')}
+            </span>
+            <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-white">
+              {t('store.packContains')} · {t('events.goNow')} →
+            </span>
+          </span>
+        </button>
+        <div
+          className="relative overflow-hidden rounded-2xl shadow-xl ring-1 ring-white/30"
+          style={{ background: 'linear-gradient(120deg, #dbeafe 0%, #7dd3fc 55%, #38bdf8 100%)' }}
+          aria-label={t('events.winterTitle')}
+        >
+          <img src={packTealUrl} alt="" aria-hidden className="absolute -right-6 -top-8 h-40 w-auto rotate-6 opacity-90 drop-shadow-2xl" />
+          <span className="relative block p-4">
+            <span className="text-[9.5px] font-black uppercase tracking-[0.3em] text-[#075985]">{t('events.winterKicker')}</span>
+            <span className="font-display mt-1 block text-[26px] font-bold uppercase leading-[0.95] text-[#082f49]" style={{ textShadow: '0 1px 0 rgba(255,255,255,0.5)' }}>
+              {t('events.winterTitle')}
+            </span>
+            <span className="tnum mt-2 inline-flex items-center gap-2 rounded-full bg-[#082f49]/85 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-white">
+              {t('events.loginDays', { n: loginDayCount(profile) })}
+            </span>
+          </span>
+        </div>
+      </div>
+
       {/* Epic fix round (P2-19): event chapters, the Event Points milestone
           track and the Event Token shop. */}
       <EventTrackPanel profile={profile} onCommit={onCommit} setNotice={setNotice} setError={setError} />
@@ -174,7 +235,7 @@ export function EventsScreen({
                           ? t('events.day7Claimed', { coins: formatNumber(r.coins), names: r.packNames.join(', ') })
                           : t('events.dayClaimed', { d: d.day, coins: formatNumber(r.coins) }));
                       }}
-                      className="rounded-lg bg-[var(--accent)] px-3 py-1.5 text-xs font-black uppercase text-[#0a120c]"
+                      className="font-display rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow"
                     >
                       {t('hub.claim')}
                     </button>
@@ -215,7 +276,7 @@ export function EventsScreen({
                       onCommit(r.profile);
                       setNotice(`${m.label} — ${r.packNames.join(', ')}`);
                     }}
-                    className="mt-2 rounded-lg bg-[var(--gold)] px-3 py-1.5 text-xs font-black uppercase text-black"
+                    className="font-display mt-2 rounded-full bg-[#c6f135] px-4 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] shadow"
                   >
                     {t('events.claimPack')}
                   </button>
@@ -359,7 +420,7 @@ function EventTrackPanel({ profile, onCommit, setNotice, setError }: {
                 type="button"
                 disabled={isClaimed || !reachedIt}
                 onClick={() => claimMilestone(i)}
-                className="mt-2 w-full rounded-lg bg-fuchsia-400 px-3 py-1.5 text-[13px] font-bold text-[#0a120c] disabled:cursor-not-allowed disabled:opacity-40"
+                className="font-display mt-2 w-full rounded-full bg-[#c6f135] px-3 py-1.5 text-[13px] font-bold uppercase tracking-wider text-[#111827] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isClaimed ? `${t('hub.claimed')} ✓` : reachedIt ? t('events.claimMilestone') : t('events.ptsToGo', { n: m.points - points })}
               </button>

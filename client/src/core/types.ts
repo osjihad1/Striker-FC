@@ -67,7 +67,36 @@ export interface FaceAppearance {
   headband?: boolean;
   /** Sleeve tattoo on the right arm. */
   sleeveTattoo?: boolean;
+  // Realistic-models pass (player-models spec §1.4): all optional — the
+  // face atlas derives neutral defaults when a player omits them.
+  /** Iris hex, default '#3b2f2f'. */
+  eyeColor?: string;
+  /** Shifts the face-tile blush / shadow hue only. Default 'WARM'. */
+  skinUndertone?: 'WARM' | 'COOL' | 'NEUTRAL';
+  /** Drives strand curl radius in the hair build. Default derived from hairStyle. */
+  hairTexture?: 'STRAIGHT' | 'WAVY' | 'CURLY' | 'COILY';
+  /** SQUARE widens the jaw, LONG lengthens it, ROUND widens the cheeks. Default 'OVAL'. */
+  faceShape?: 'OVAL' | 'ROUND' | 'SQUARE' | 'LONG';
+  /** HOOKED tilts the nose bridge, BROAD widens the tip, BUTTON shrinks it. Default 'STRAIGHT'. */
+  noseShape?: 'STRAIGHT' | 'HOOKED' | 'BROAD' | 'BUTTON';
+  /** 0.85..1.2 lip mesh scale, default 1. */
+  lipFullness?: number;
+  /** 0.85..1.15 ear scale, default 1. */
+  earSize?: number;
 }
+
+/** Kit shirt patterns (player-models spec §1.6), drawn into the jersey atlas. */
+export type KitPattern =
+  | 'SOLID' | 'STRIPES_VERTICAL' | 'STRIPES_HORIZONTAL' | 'HOOPS' | 'SASH' | 'HALVES' | 'CHEST_BAND';
+
+export type CollarStyle = 'CREW' | 'V_NECK' | 'POLO';
+
+/** Signature goal celebrations (player-models spec §2.5) — a subset of the
+ *  animator's AnimState names, declared here so data modules can carry one
+ *  without importing the renderer. */
+export type CelebrationState =
+  | 'CELEBRATE_KNEE_SLIDE' | 'CELEBRATE_FIST_PUMP' | 'CELEBRATE_POINT_SKY' | 'CELEBRATE_SIU'
+  | 'CELEBRATE_ARMS_OUT' | 'CELEBRATE_ARMS_CROSSED' | 'CELEBRATE_KNEEL_POINT' | 'CELEBRATE_EMBRACE';
 
 export interface CoreStats {
   pac: number;
@@ -133,6 +162,9 @@ export interface PlayerTemplate {
   realWorld?: boolean;
   /** National-team shirt number for real-world players. */
   shirtNumber?: number;
+  /** Signature goal celebration (player-models spec §2.5); the match
+   *  engine and the showcase fall back to a generic celebration when unset. */
+  celebration?: CelebrationState;
 }
 
 export interface OwnedPlayerCard {
@@ -370,6 +402,11 @@ export interface Club {
   socksColor?: string;
   awayPrimary?: string;
   awaySecondary?: string;
+  /** Realistic-models pass (spec §1.6): shirt pattern / collar drawn into
+   *  the jersey atlas; sleeve colour override (e.g. Arsenal's white sleeves). */
+  kitPattern?: KitPattern;
+  collarStyle?: CollarStyle;
+  sleeveColor?: string;
   /** The club's identity formation id (seedDatabase SEED_FORMATIONS). */
   formationId?: string;
   /** Template id of the club captain. */

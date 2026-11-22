@@ -72,14 +72,24 @@ export const CLUB_CAPTAINS: Record<string, string> = {
 
 /** Full kit for a club: shirt/trim from the club colours, shorts + socks
  *  from the club record when set, sensible defaults otherwise, plus the
- *  away strip used when two kits clash. */
-export function clubKit(club: Club, away = false): { primary: string; secondary: string; shorts: string; socks: string } {
+ *  away strip used when two kits clash. The realistic-models pass threads
+ *  the club's shirt pattern / collar / sleeve colour / abbreviation
+ *  through to the rig (spec §1.6) — KitColors carries them as optional
+ *  fields, so every existing consumer keeps working unchanged. */
+export function clubKit(club: Club, away = false): { primary: string; secondary: string; shorts: string; socks: string; pattern?: Club['kitPattern']; collarStyle?: Club['collarStyle']; sleeveColor?: string; abbr?: string } {
+  const identity = {
+    pattern: club.kitPattern,
+    collarStyle: club.collarStyle,
+    sleeveColor: club.sleeveColor,
+    abbr: club.abbr,
+  };
   if (away) {
     return {
       primary: club.awayPrimary ?? club.secondary,
       secondary: club.awaySecondary ?? club.primary,
       shorts: club.awaySecondary ?? club.primary,
       socks: club.awayPrimary ?? club.secondary,
+      ...identity,
     };
   }
   return {
@@ -87,6 +97,7 @@ export function clubKit(club: Club, away = false): { primary: string; secondary:
     secondary: club.secondary,
     shorts: club.shortsColor ?? '#f8fafc',
     socks: club.socksColor ?? club.primary,
+    ...identity,
   };
 }
 

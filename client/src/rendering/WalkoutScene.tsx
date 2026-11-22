@@ -122,6 +122,8 @@ export function WalkoutScene({ homeXI, awayXI, homeKit, awayKit, onDone }: Walko
           isGk ? kitFor(gkKind, homeKit, awayKit) : kit,
           tpl.shirtNumber ?? i + 1,
           tpl.shortName,
+          'FULL',
+          { gk: isGk }, // keepers walk out in long sleeves (spec §1.6.5)
         );
         const p0 = new THREE.Vector3(fileX, 0, -30 + i * 1.15);
         const p1 = new THREE.Vector3(-13.75 + i * 2.75, 0, lineUpZ);

@@ -1,20 +1,73 @@
 // Striker FC — ui/components/PlayerCard.tsx
-// Phase 07 holographic shield card (Blueprint 08 §1): angled crest silhouette,
-// animated metallic foil shimmer per rarity, procedural SVG portrait rendered
-// from the player's FaceAppearance + club kit (so the card matches the 3D rig),
-// effective OVR, position, nationality, club badge, rank gem and training level.
+// FC Mobile skin pass (visual bible §2.3): a RECTANGULAR card with a thick
+// metallic frame — never the old pointed shield. The face carries ONLY:
+// big OVR top-left, position under it, the player's portrait in his club
+// kit, a name plate band at the bottom, and under the name a real nation
+// FLAG image + club CREST image. No stat pills, no rank gem, no training
+// chips on the face — stats live on the detail screen. The portrait is a
+// richly shaded render from the player's FaceAppearance + club kit (the
+// same data that builds his 3D rig), so it works fully offline.
 
+import { useId } from 'react';
 import type { FaceAppearance, OwnedPlayerCard, PlayerTemplate } from '../../core/types';
 import { getCardEffectiveOvr } from '../../core/types';
 import { ALL_CLUBS } from '../../data/Clubs';
+import { FlagArt } from './FlagArt';
+import { ClubCrestArt } from './ClubCrestArt';
 
-export const RARITY_FOIL: Record<PlayerTemplate['rarity'], { foil: string; edge: string; ink: string; label: string }> = {
-  BRONZE: { foil: 'linear-gradient(150deg, #8a5a30 0%, #c98d4e 34%, #5e3a1e 68%, #a06a35 100%)', edge: '#b0793f', ink: '#ffe3ba', label: 'Bronze' },
-  SILVER: { foil: 'linear-gradient(150deg, #9aa5b1 0%, #e8edf2 34%, #5f6b78 68%, #c3ccd6 100%)', edge: '#c3ccd6', ink: '#10151c', label: 'Silver' },
-  GOLD: { foil: 'linear-gradient(150deg, #a97b12 0%, #ffd94d 32%, #8a5f08 66%, #f5c542 100%)', edge: '#ffd94d', ink: '#241a02', label: 'Gold' },
-  ELITE: { foil: 'linear-gradient(150deg, #7f1d1d 0%, #b91c1c 30%, #450a0a 62%, #f59e0b 130%)', edge: '#f59e0b', ink: '#ffe9c9', label: 'Elite' },
-  MASTER: { foil: 'linear-gradient(150deg, #164e63 0%, #06b6d4 30%, #4c1d95 68%, #22d3ee 105%)', edge: '#22d3ee', ink: '#e0fbff', label: 'Master' },
-  LEGEND: { foil: 'linear-gradient(150deg, #f8ecd0 0%, #ffffff 30%, #e9c766 62%, #fff6da 100%)', edge: '#f5c542', ink: '#2a1e02', label: 'Legend' },
+export interface FoilTheme {
+  foil: string; edge: string; ink: string; label: string;
+  /** Name-plate band + its text colour. */
+  plate: string; plateInk: string;
+  /** Inner art panel behind the portrait. */
+  panel: string;
+}
+
+export const RARITY_FOIL: Record<PlayerTemplate['rarity'], FoilTheme> = {
+  BRONZE: {
+    foil: 'linear-gradient(150deg, #8a5a30 0%, #c98d4e 34%, #5e3a1e 68%, #a06a35 100%)', edge: '#b0793f', ink: '#ffe3ba', label: 'Bronze',
+    plate: 'linear-gradient(180deg, #7c4f24, #54330f)', plateInk: '#ffe3ba',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #4a2f16 0%, #241505 78%)',
+  },
+  SILVER: {
+    foil: 'linear-gradient(150deg, #9aa5b1 0%, #e8edf2 34%, #5f6b78 68%, #c3ccd6 100%)', edge: '#c3ccd6', ink: '#10151c', label: 'Silver',
+    plate: 'linear-gradient(180deg, #e8edf2, #aeb9c6)', plateInk: '#10151c',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #3d4754 0%, #141a21 78%)',
+  },
+  GOLD: {
+    foil: 'linear-gradient(150deg, #a97b12 0%, #ffd94d 32%, #8a5f08 66%, #f5c542 100%)', edge: '#ffd94d', ink: '#241a02', label: 'Gold',
+    plate: 'linear-gradient(180deg, #ffe066, #d9a521)', plateInk: '#241a02',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #6b4e07 0%, #2a1e02 78%)',
+  },
+  ELITE: {
+    foil: 'linear-gradient(150deg, #7f1d1d 0%, #b91c1c 30%, #450a0a 62%, #f59e0b 130%)', edge: '#f59e0b', ink: '#ffe9c9', label: 'Elite',
+    plate: 'linear-gradient(180deg, #991b1b, #5f0d0d)', plateInk: '#ffe9c9',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #571111 0%, #1c0505 78%)',
+  },
+  MASTER: {
+    foil: 'linear-gradient(150deg, #164e63 0%, #06b6d4 30%, #4c1d95 68%, #22d3ee 105%)', edge: '#22d3ee', ink: '#e0fbff', label: 'Master',
+    plate: 'linear-gradient(180deg, #155e75, #312e81)', plateInk: '#e0fbff',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #173a5e 0%, #070d24 78%)',
+  },
+  LEGEND: {
+    foil: 'linear-gradient(150deg, #f8ecd0 0%, #ffffff 30%, #e9c766 62%, #fff6da 100%)', edge: '#f5c542', ink: '#2a1e02', label: 'Legend',
+    plate: 'linear-gradient(180deg, #fff3cf, #e9c766)', plateInk: '#2a1e02',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #7a5c10 0%, #33270a 78%)',
+  },
+};
+
+/** Event foils (visual bible §5): Dreamchasers blue→purple, rainbow holo. */
+export const EVENT_FOIL: Record<'DREAM' | 'HOLO', FoilTheme> = {
+  DREAM: {
+    foil: 'linear-gradient(160deg, #1d4ed8 0%, #3b82f6 34%, #7c3aed 72%, #22d3ee 115%)', edge: '#60a5fa', ink: '#ffffff', label: 'Dreamchasers',
+    plate: 'linear-gradient(180deg, #1e40af, #4c1d95)', plateInk: '#ffffff',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #1e3a8a 0%, #0b1030 78%)',
+  },
+  HOLO: {
+    foil: 'linear-gradient(150deg, #f472b6 0%, #facc15 30%, #4ade80 55%, #38bdf8 78%, #c084fc 100%)', edge: '#f0abfc', ink: '#ffffff', label: 'Holo',
+    plate: 'linear-gradient(180deg, #312e81, #701a75)', plateInk: '#ffffff',
+    panel: 'radial-gradient(90% 70% at 50% 30%, #3b0764 0%, #12041f 78%)',
+  },
 };
 
 export const RANK_GEMS: { color: string; name: string }[] = [
@@ -26,9 +79,9 @@ export const RANK_GEMS: { color: string; name: string }[] = [
   { color: '#f5c542', name: 'Gold' },
 ];
 
-const SHIELD_CLIP = 'polygon(8% 0%, 92% 0%, 100% 10%, 100% 68%, 50% 100%, 0% 68%, 0% 10%)';
-
-/** Procedural athlete portrait: skin, hair style/color and kit from FaceAppearance. */
+/** Shaded athlete portrait: skin, hair style/colour and kit from
+ *  FaceAppearance — layered gradients, rim light and kit shading so the
+ *  card face reads as a photo-style render, not a flat icon. */
 export function AthletePortrait({
   appearance, primary, secondary, label,
 }: {
@@ -37,23 +90,52 @@ export function AthletePortrait({
   secondary: string;
   label: string;
 }) {
-  const shoulderHalf = appearance.build === 'STOCKY' ? 40 : appearance.build === 'ATHLETIC' ? 35 : 30;
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const shoulderHalf = appearance.build === 'STOCKY' ? 41 : appearance.build === 'ATHLETIC' ? 36 : 31;
   const hair = appearance.hairColor;
   const skin = appearance.skinTone;
+  const skinId = `skin-${uid}`;
+  const kitId = `kit-${uid}`;
+  const shadeId = `shade-${uid}`;
   return (
     <svg viewBox="0 0 100 100" role="img" aria-label={label} className="h-full w-full">
-      {/* torso / kit */}
+      <defs>
+        <radialGradient id={skinId} cx="42%" cy="34%" r="75%">
+          <stop offset="0%" stopColor={skin} />
+          <stop offset="72%" stopColor={skin} />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.28" />
+        </radialGradient>
+        <linearGradient id={kitId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={primary} />
+          <stop offset="55%" stopColor={primary} />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.32" />
+        </linearGradient>
+        <linearGradient id={shadeId} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#000" stopOpacity="0.22" />
+          <stop offset="28%" stopColor="#000" stopOpacity="0" />
+          <stop offset="72%" stopColor="#fff" stopOpacity="0.10" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.26" />
+        </linearGradient>
+      </defs>
+      {/* torso / kit with shading, collar and a sponsor-band stripe */}
       <path
         d={`M ${50 - shoulderHalf} 100 C ${50 - shoulderHalf} 78, ${50 - 13} 72, 50 70 C ${50 + 13} 72, ${50 + shoulderHalf} 78, ${50 + shoulderHalf} 100 Z`}
-        fill={primary}
+        fill={`url(#${kitId})`}
       />
-      <path d="M 41 73 L 50 84 L 59 73 L 59 79 L 50 90 L 41 79 Z" fill={secondary} opacity={0.9} />
-      <rect x={50 - shoulderHalf} y={93} width={shoulderHalf * 2} height={3.4} fill={secondary} opacity={0.65} />
+      <path d="M 41 73 L 50 84 L 59 73 L 59 79 L 50 90 L 41 79 Z" fill={secondary} opacity={0.95} />
+      <rect x={50 - shoulderHalf} y={88} width={shoulderHalf * 2} height={4.6} fill={secondary} opacity={0.5} />
+      <path
+        d={`M ${50 - shoulderHalf} 100 C ${50 - shoulderHalf} 78, ${50 - 13} 72, 50 70 C ${50 + 13} 72, ${50 + shoulderHalf} 78, ${50 + shoulderHalf} 100 Z`}
+        fill={`url(#${shadeId})`}
+      />
       {/* neck + head */}
       <rect x={45.5} y={58} width={9} height={12} rx={3} fill={skin} />
+      <rect x={45.5} y={58} width={9} height={5} rx={2.4} fill="#000" opacity={0.18} />
+      <ellipse cx={35.6} cy={43} rx={2.1} ry={3.1} fill={skin} />
+      <ellipse cx={64.4} cy={43} rx={2.1} ry={3.1} fill={skin} />
       {appearance.hairStyle === 'AFRO' && <circle cx={50} cy={33} r={19} fill={hair} />}
       {appearance.hairStyle === 'LONG' && <path d="M 33 30 C 33 62, 36 70, 39 74 L 44 74 C 40 62, 39 44, 40 32 Z M 67 30 C 67 62, 64 70, 61 74 L 56 74 C 60 62, 61 44, 60 32 Z" fill={hair} />}
-      <circle cx={50} cy={42} r={14.5} fill={skin} />
+      <circle cx={50} cy={42} r={14.5} fill={`url(#${skinId})`} />
       {/* hair styles drawn over the head */}
       {appearance.hairStyle === 'SHORT' && <path d="M 35.5 42 C 35 29, 42 26.5, 50 26.5 C 58 26.5, 65 29, 64.5 42 C 62 33, 57 31, 50 31 C 43 31, 38 33, 35.5 42 Z" fill={hair} />}
       {appearance.hairStyle === 'FADE' && <path d="M 36 40 C 36.5 30, 43 28, 50 28 C 57 28, 63.5 30, 64 40 C 61 34.5, 56.5 33.5, 50 33.5 C 43.5 33.5, 39 34.5, 36 40 Z" fill={hair} />}
@@ -88,9 +170,7 @@ export function AthletePortrait({
         </g>
       )}
       {appearance.headband && <path d="M 35.8 36.5 C 42 33.8, 58 33.8, 64.2 36.5 L 64.2 39.8 C 58 37.2, 42 37.2, 35.8 39.8 Z" fill={secondary} />}
-      {/* Epic P0-4 face: brows, eyes, nose line, mouth — and the beard.
-          Beard first (behind the mouth), drawn from beardStyle so Messi's
-          full beard and Salah's curls+beard read on the card too. */}
+      {/* face: brows, eyes, nose, mouth, beard (from beardStyle). */}
       {appearance.beardStyle === 'FULL' && (
         <path d="M 38.5 44 C 38 54, 42 58.5, 50 58.5 C 58 58.5, 62 54, 61.5 44 C 59 52, 55 54.5, 50 54.5 C 45 54.5, 41 52, 38.5 44 Z" fill={appearance.beardColor ?? hair} />
       )}
@@ -119,127 +199,94 @@ export function AthletePortrait({
 export interface PlayerCardProps {
   template: PlayerTemplate;
   card?: OwnedPlayerCard | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   onClick?: () => void;
   selected?: boolean;
+  /** Event-card foil override (Dreamchasers / Holo) — face art only. */
+  eventFoil?: 'DREAM' | 'HOLO';
 }
 
 const SIZE_CLASS = {
+  xs: 'w-[76px]',
   sm: 'w-[104px]',
   md: 'w-[148px]',
   lg: 'w-[196px]',
 } as const;
 
-export function PlayerCard({ template, card, size = 'md', onClick, selected }: PlayerCardProps) {
-  const foil = RARITY_FOIL[template.rarity];
+const SIZE_SCALE = { xs: 0.51, sm: 0.72, md: 1, lg: 1.32 } as const;
+
+export function PlayerCard({ template, card, size = 'md', onClick, selected, eventFoil }: PlayerCardProps) {
+  const foil = eventFoil ? EVENT_FOIL[eventFoil] : RARITY_FOIL[template.rarity];
   const club = ALL_CLUBS.find((c) => c.id === template.clubId);
   const ovr = card ? getCardEffectiveOvr(template, card) : template.baseOvr;
   const rank = card?.rank ?? 0;
-  const gem = RANK_GEMS[rank] ?? RANK_GEMS[0]!;
-  const scale = size === 'sm' ? 0.72 : size === 'lg' ? 1.32 : 1;
+  const scale = SIZE_SCALE[size];
+  const frame = Math.max(3, 5 * scale);
 
   const inner = (
     <div
-      className={`relative overflow-hidden ${template.rarity === 'LEGEND' ? 'legend-aura' : ''}`}
+      className={`relative ${template.rarity === 'LEGEND' && !eventFoil ? 'legend-aura' : ''}`}
       style={{
-        clipPath: SHIELD_CLIP,
         background: foil.foil,
-        boxShadow: 'inset 0 0 0 2px rgba(0,0,0,0.25)',
-        aspectRatio: '3 / 3.9',
+        borderRadius: 10 * scale + 4,
+        padding: frame,
+        boxShadow: '0 6px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 5px rgba(0,0,0,0.35)',
       }}
     >
-      <div className="holo-shine" aria-hidden />
-      <div className="absolute inset-0 flex flex-col" style={{ color: foil.ink }}>
-        {/* top row: OVR + position / flag + club */}
-        <div className="flex items-start justify-between px-[9%] pt-[7%]">
-          <div className="text-center leading-none">
-            <p className="font-display font-bold" style={{ fontSize: 30 * scale }}>{ovr}</p>
-            <p className="font-display font-bold uppercase" style={{ fontSize: 14 * scale }}>{template.position}</p>
-            <p
-              className="mx-auto mt-1 rounded-sm bg-black/45 px-1 font-bold tracking-widest text-white"
-              style={{ fontSize: 9 * scale }}
-              aria-label={`Nationality ${template.nationality}`}
-            >
-              {template.nationality}
-            </p>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <span
-              className="flex items-center justify-center rounded-full border font-display font-bold"
-              style={{
-                width: 30 * scale, height: 30 * scale, fontSize: 9.5 * scale,
-                background: club?.primary ?? '#222', color: club?.secondary ?? '#fff',
-                borderColor: 'rgba(255,255,255,0.55)',
-              }}
-              aria-label={club?.name ?? template.clubId}
-            >
-              {club?.abbr ?? '—'}
-            </span>
-            <span className="font-bold uppercase tracking-wider opacity-80" style={{ fontSize: 8.5 * scale }}>
-              {foil.label}
-            </span>
-          </div>
-        </div>
-        {/* portrait */}
-        <div className="mx-auto mt-[1%] w-[62%] flex-1">
-          <AthletePortrait
-            appearance={template.appearance}
-            primary={club?.primary ?? '#14532d'}
-            secondary={club?.secondary ?? '#ffffff'}
-            label={`${template.name} portrait`}
-          />
-        </div>
-        {/* name + badges — kept clear of the shield's narrowing tip */}
-        <div className="px-[7%] pb-[21%]">
-          <p
-            className="truncate text-center font-display font-bold uppercase leading-tight"
-            style={{ fontSize: 13.5 * scale, textShadow: '0 1px 0 rgba(255,255,255,0.25)' }}
-          >
-            {template.shortName}
-          </p>
-          <div className="mt-1 flex items-center justify-center gap-1.5" style={{ fontSize: 9.5 * scale }}>
-            <span className="flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 font-bold text-white">
-              PAC {template.stats.pac} · SHO {template.stats.sho} · PAS {template.stats.pas}
-            </span>
-          </div>
-          <div className="mt-1 flex items-center justify-center gap-1.5" style={{ fontSize: 9.5 * scale }}>
-            <span className="flex items-center gap-1 rounded-full bg-black/45 px-1.5 py-0.5 font-bold text-white">
-              DRI {template.stats.dri} · DEF {template.stats.def} · PHY {template.stats.phy}
-            </span>
-            <span className="rounded-full bg-black/45 px-1.5 py-0.5 font-bold text-white" aria-label={`Skill moves ${template.skillMoves} stars, weak foot ${template.weakFoot} stars`}>
-              ★{template.skillMoves} · WF {template.weakFoot}★
-            </span>
-          </div>
-          {club && (
-            <p className="mt-1 truncate text-center font-semibold uppercase tracking-wider opacity-75" style={{ fontSize: 8.5 * scale }}>
-              {club.name}
-            </p>
-          )}
-          {card && (
-            <div className="mt-1 flex items-center justify-center gap-1.5" style={{ fontSize: 9.5 * scale }}>
-              {rank > 0 && (
-                <span className="flex items-center gap-1 rounded-full bg-black/50 px-1.5 py-0.5 font-bold text-white">
-                  <span
-                    aria-hidden
-                    className="inline-block rotate-45"
-                    style={{ width: 7 * scale, height: 7 * scale, background: gem.color, boxShadow: '0 0 4px rgba(0,0,0,0.6)' }}
-                  />
-                  Rank {rank} · {gem.name}
-                </span>
-              )}
-              <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-bold text-white">
-                Train Lv {card.trainingLevel}
-              </span>
-              {card.locked && <span className="rounded-full bg-black/50 px-1.5 py-0.5 font-bold text-white">Locked</span>}
+      <div
+        className="relative overflow-hidden"
+        style={{ background: foil.panel, borderRadius: 7 * scale + 2, aspectRatio: '3 / 3.72' }}
+      >
+        <div className="holo-shine" aria-hidden />
+        {/* corner flourishes on the frame's inner art */}
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[16%] opacity-25" style={{ background: `linear-gradient(180deg, ${foil.edge}55, transparent)` }} />
+        <div className="absolute inset-0 flex flex-col" style={{ color: foil.ink }}>
+          {/* top row: OVR + position (left), club crest (right) */}
+          <div className="flex items-start justify-between px-[8%] pt-[6%]">
+            <div className="text-center leading-none" style={{ textShadow: '0 2px 6px rgba(0,0,0,0.55)' }}>
+              <p className="font-display font-bold" style={{ fontSize: 32 * scale }}>{ovr}</p>
+              <p className="font-display font-bold uppercase" style={{ fontSize: 14.5 * scale }}>{template.position}</p>
             </div>
-          )}
+            {club && (
+              <div style={{ marginTop: 2 * scale }}>
+                <ClubCrestArt clubId={club.id} primary={club.primary} secondary={club.secondary} abbr={club.abbr} name={club.name} size={Math.round(27 * scale)} />
+              </div>
+            )}
+          </div>
+          {/* portrait */}
+          <div className="mx-auto w-[68%] flex-1" style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.45))' }}>
+            <AthletePortrait
+              appearance={template.appearance}
+              primary={club?.primary ?? '#14532d'}
+              secondary={club?.secondary ?? '#ffffff'}
+              label={`${template.name} portrait`}
+            />
+          </div>
+          {/* name plate: surname band + flag & crest row — nothing else */}
+          <div
+            className="relative px-[5%] pb-[5%] pt-[3.5%]"
+            style={{ background: foil.plate, color: foil.plateInk, boxShadow: '0 -2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.45)' }}
+          >
+            <p
+              className="truncate text-center font-display font-bold uppercase leading-tight"
+              style={{ fontSize: 14.5 * scale, letterSpacing: '0.02em' }}
+            >
+              {template.shortName}
+            </p>
+            <div className="mt-[4%] flex items-center justify-center gap-[7%]">
+              <FlagArt code={template.nationality} width={Math.round(21 * scale)} />
+              {club && (
+                <ClubCrestArt clubId={club.id} primary={club.primary} secondary={club.secondary} abbr={club.abbr} name={club.name} size={Math.round(15 * scale)} />
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 
   const wrapStyle = selected
-    ? { outline: '3px solid var(--accent)', outlineOffset: 2, borderRadius: 10 }
+    ? { outline: '3px solid var(--teal)', outlineOffset: 2, borderRadius: 12 }
     : undefined;
 
   if (onClick) {

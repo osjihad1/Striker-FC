@@ -145,7 +145,7 @@ export class MatchEngine {
       ballAngVel: createVec3(),
       shotInFlight: false,
       shotType: null,
-      players: Array.from({ length: 22 }, () => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as const, diveDir: 1, stamina: 1 })),
+      players: Array.from({ length: 22 }, () => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as const, diveDir: 1, skill: null, stamina: 1 })),
       activeGlobal: -1,
       secondPresserGlobal: -1,
       passTargetGlobal: -1,

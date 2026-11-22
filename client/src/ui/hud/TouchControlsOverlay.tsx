@@ -69,6 +69,8 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
   // Epic P0-6: SPRINT is its own button now (it was fused into SKILL /
   // TACKLE, so you could not sprint without also tackling or tricking).
   const [sprintHeld, setSprintHeld] = useState(false);
+  // DEFEND big-circle: a short tap switches player, a hold sprints.
+  const sprintTapAtRef = useRef(0);
   // Epic P0-6: long-pressing SKILL (≥350 ms) opens the six-move wheel.
   const [wheelOpen, setWheelOpen] = useState(false);
   const wheelTimerRef = useRef<number | null>(null);
@@ -81,8 +83,6 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
   useSettingsStore((s) => s.language);
   // Cycle-2 match-up: TACKLE held in the DEFEND layout = contain.
   const [matchUpHeldUi, setMatchUpHeldUi] = useState(false);
-  const btnSize = Math.round(76 * buttonScale);
-  const clusterWidth = Math.round(188 * buttonScale);
   const stickOnRight = joystickSide === 'RIGHT';
 
   // Repaint while any control is active so the power ring / chevrons stay live.
@@ -257,7 +257,7 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
       >
         {joy.active && (
           <div
-            className="absolute rounded-full border-2 border-white/35 bg-white/10"
+            className="absolute rounded-full border-2 border-white/50 bg-black/35"
             style={{
               width: JOYSTICK_RADIUS * 2, height: JOYSTICK_RADIUS * 2,
               left: joy.originX - JOYSTICK_RADIUS, top: joy.originY - JOYSTICK_RADIUS,
@@ -265,7 +265,7 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
             }}
           >
             <div
-              className="absolute rounded-full bg-white/45 shadow-lg"
+              className="absolute rounded-full bg-white shadow-lg"
               style={{
                 width: 52, height: 52,
                 left: JOYSTICK_RADIUS - 26 + joy.dx,
@@ -275,8 +275,15 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
           </div>
         )}
         {!joy.active && (
-          <div className={`absolute bottom-6 flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/5 text-[10px] font-bold uppercase tracking-widest text-white/50 ${stickOnRight ? 'right-6' : 'left-6'}`}>
-            {t('ctl.move')}
+          /* Persistent home stick (bible §2.13): a solid white stick on a
+             dark disc, always visible at its fixed home position. */
+          <div
+            aria-hidden
+            className={`absolute bottom-6 flex items-center justify-center rounded-full border border-white/30 bg-black/45 shadow-lg ${stickOnRight ? 'right-6' : 'left-6'}`}
+            style={{ width: 108, height: 108 }}
+          >
+            <div className="rounded-full bg-white shadow" style={{ width: 52, height: 52 }} />
+            <span className="sr-only">{t('ctl.move')}</span>
           </div>
         )}
         {joy.active && joy.zone === 'FAST' && (
@@ -291,26 +298,34 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
         )}
       </div>
 
-      {/* Action cluster — opposite the stick, sized by Settings → Button size,
-          offset by the safe-area insets so it never clips under a notch.
-          Epic P0-6: the 2×2 action grid sits over a full-width SPRINT pill —
-          sprint is its own hold-to-run control in both layouts. */}
+      {/* Action cluster — FC Mobile geometry (visual bible §2.13): four
+          large dark circles in a triangle, thin coloured rims, ONE bold
+          white word each, no sub-labels. The biggest circle (bottom-right)
+          merges SPRINT & SKILL: hold = sprint, tap = skill move,
+          long-press = skill wheel, swipe = directional skill. In the
+          DEFEND layout the big circle is SPRINT (tap = switch player). */}
       <div
-        className="absolute flex flex-col gap-2.5"
+        className="absolute"
         style={{
-          width: clusterWidth,
-          bottom: 'calc(16px + env(safe-area-inset-bottom, 0px))',
+          width: Math.round(238 * buttonScale),
+          height: Math.round(218 * buttonScale),
+          bottom: 'calc(14px + env(safe-area-inset-bottom, 0px))',
           ...(stickOnRight
             ? { left: 'calc(12px + env(safe-area-inset-left, 0px))' }
             : { right: 'calc(12px + env(safe-area-inset-right, 0px))' }),
         }}
       >
-      <div className="grid grid-cols-2 gap-2.5">
-        {buttons.map((b) => {
+        {buttons.filter((b) => b.id !== 'SKILL' && b.id !== 'SWITCH').map((b) => {
           const tracker = trackersRef.current[b.id];
           const power = input.chargePower(b.id);
           const charging = input.isCharging(b.id);
           const swipe = tracker?.previewDir() ?? null;
+          const size = Math.round((b.id === 'SHOOT' || b.id === 'SLIDE' || b.id === 'TACKLE' ? 88 : b.id === 'PASS' ? 84 : 76) * buttonScale);
+          const pos: Record<string, string | number> = b.id === 'THROUGH' || b.id === 'SECOND'
+            ? { left: 0, top: 0 }
+            : b.id === 'SHOOT' || b.id === 'SLIDE'
+              ? { right: 0, top: 0 }
+              : { left: Math.round(8 * buttonScale), bottom: 0 };
           const ring = 2 * Math.PI * 33;
           const label = b.id === 'TACKLE' && matchUpHeldUi ? t('ctl.matchUp') : t(b.labelKey);
           const sub = b.id === 'TACKLE' && matchUpHeldUi ? t('ctl.contain') : t(b.subKey);
@@ -319,12 +334,12 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
               key={b.id}
               type="button"
               aria-label={`${label} button — ${sub}`}
-              className="pointer-events-auto relative flex touch-none flex-col items-center justify-center rounded-full border backdrop-blur-[2px]"
+              className="pointer-events-auto absolute flex touch-none flex-col items-center justify-center rounded-full border-2 backdrop-blur-[2px]"
               style={{
-                height: btnSize,
+                width: size, height: size, ...pos,
                 borderColor: b.color,
-                background: 'rgba(8,12,8,0.55)',
-                boxShadow: charging ? `0 0 0 2px ${powerColor(power)} inset` : undefined,
+                background: 'rgba(8,12,8,0.60)',
+                boxShadow: charging ? `0 0 0 2px ${powerColor(power)} inset` : '0 4px 14px rgba(0,0,0,0.45)',
               }}
               onPointerDown={btnDown(b.id)}
               onPointerMove={btnMove(b.id)}
@@ -332,27 +347,24 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
               onPointerCancel={btnCancel(b.id)}
               onContextMenu={(e) => e.preventDefault()}
             >
-              <svg className="pointer-events-none absolute inset-0 m-auto" width={btnSize} height={btnSize} viewBox="0 0 76 76" aria-hidden>
-                <circle cx="38" cy="38" r="33" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="4" />
+              <svg className="pointer-events-none absolute inset-0 m-auto" width={size} height={size} viewBox="0 0 76 76" aria-hidden>
                 {charging && (
                   <circle
-                    cx="38" cy="38" r="33" fill="none"
-                    stroke={powerColor(power)} strokeWidth="4" strokeLinecap="round"
+                    cx="38" cy="38" r="34.5" fill="none"
+                    stroke={powerColor(power)} strokeWidth="3" strokeLinecap="round"
                     strokeDasharray={ring}
                     strokeDashoffset={ring * (1 - power)}
                     transform="rotate(-90 38 38)"
                   />
                 )}
               </svg>
-              <span className="pointer-events-none font-display text-[13px] font-bold leading-none tracking-wide" style={{ color: b.color }}>
+              <span className="font-display pointer-events-none px-1 text-center text-[14px] font-bold uppercase leading-none tracking-wide text-white">
                 {label}
               </span>
-              {charging ? (
+              {charging && (
                 <span className="tnum pointer-events-none mt-1 text-[11px] font-bold" style={{ color: powerColor(power) }}>
                   {Math.round(power * 100)}%
                 </span>
-              ) : (
-                <span className="pointer-events-none mt-1 px-1 text-center text-[8.5px] leading-tight text-white/60">{sub}</span>
               )}
               {swipe && (
                 <span aria-hidden className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white">
@@ -367,27 +379,58 @@ export function TouchControlsOverlay({ input, mode }: { input: InputManager; mod
             </button>
           );
         })}
-      </div>
-        <button
-          type="button"
-          aria-label="Sprint button — hold to sprint"
-          aria-pressed={sprintHeld}
-          className="pointer-events-auto flex touch-none items-center justify-center gap-2 rounded-full border backdrop-blur-[2px]"
-          style={{
-            height: Math.round(54 * buttonScale),
-            borderColor: '#a3e635',
-            background: sprintHeld ? 'rgba(163,230,53,0.4)' : 'rgba(8,12,8,0.55)',
-            boxShadow: sprintHeld ? '0 0 0 2px #a3e635 inset' : undefined,
-          }}
-          onPointerDown={sprintDown}
-          onPointerUp={sprintUp}
-          onPointerCancel={sprintUp}
-          onPointerLeave={sprintUp}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          <span className="font-display pointer-events-none text-[15px] font-bold tracking-[0.2em] text-[#a3e635]">{t('ctl.sprint')}</span>
-          <span className="pointer-events-none text-[9px] font-bold uppercase tracking-widest text-white/60">{t('ctl.hold')}</span>
-        </button>
+        {/* The big merged circle, bottom-right */}
+        {renderMode === 'ATTACK' ? (
+          <button
+            type="button"
+            aria-label={`${t('ctl.sprint')} & ${t('ctl.skill')} button — hold to sprint, tap for a skill move, long-press for the skill wheel`}
+            aria-pressed={sprintHeld}
+            className="pointer-events-auto absolute bottom-0 right-0 flex touch-none flex-col items-center justify-center rounded-full border-2 backdrop-blur-[2px]"
+            style={{
+              width: Math.round(102 * buttonScale), height: Math.round(102 * buttonScale),
+              borderColor: '#a3e635',
+              background: sprintHeld ? 'rgba(163,230,53,0.38)' : 'rgba(8,12,8,0.60)',
+              boxShadow: sprintHeld ? '0 0 0 2px #a3e635 inset' : '0 4px 14px rgba(0,0,0,0.45)',
+            }}
+            onPointerDown={(e) => { btnDown('SKILL')(e); input.sprintTouch = true; setSprintHeld(true); }}
+            onPointerMove={btnMove('SKILL')}
+            onPointerUp={(e) => { btnUp('SKILL')(e); input.sprintTouch = false; setSprintHeld(false); }}
+            onPointerCancel={(e) => { btnCancel('SKILL')(e); input.sprintTouch = false; setSprintHeld(false); }}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span className="font-display pointer-events-none text-center text-[15px] font-bold uppercase leading-[1.05] tracking-wide text-white">
+              {t('ctl.sprint')}<br />&amp; {t('ctl.skill')}
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label={`${t('ctl.sprint')} button — hold to sprint, tap to switch player`}
+            aria-pressed={sprintHeld}
+            className="pointer-events-auto absolute bottom-0 right-0 flex touch-none flex-col items-center justify-center rounded-full border-2 backdrop-blur-[2px]"
+            style={{
+              width: Math.round(102 * buttonScale), height: Math.round(102 * buttonScale),
+              borderColor: '#a3e635',
+              background: sprintHeld ? 'rgba(163,230,53,0.38)' : 'rgba(8,12,8,0.60)',
+              boxShadow: sprintHeld ? '0 0 0 2px #a3e635 inset' : '0 4px 14px rgba(0,0,0,0.45)',
+            }}
+            onPointerDown={(e) => { sprintDown(e); sprintTapAtRef.current = performance.now(); }}
+            onPointerUp={() => {
+              if (performance.now() - sprintTapAtRef.current < 280) input.emit({ kind: 'SWITCH', dir: null });
+              sprintUp();
+            }}
+            onPointerCancel={sprintUp}
+            onPointerLeave={sprintUp}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span className="font-display pointer-events-none text-center text-[15px] font-bold uppercase leading-[1.05] tracking-wide text-white">
+              {t('ctl.sprint')}
+            </span>
+            <span className="pointer-events-none mt-0.5 px-1 text-center text-[8px] font-bold uppercase tracking-wider text-white/65">
+              {t('ctl.tapSwitch')}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Epic P0-6: the skill wheel — all six moves, star costs shown; the

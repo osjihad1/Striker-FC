@@ -8,7 +8,7 @@ import { buildPitch } from './PitchBuilder';
 import { buildStadium } from './StadiumBuilder';
 import { buildCrowd } from './CrowdInstancer';
 import { buildGoal } from './GoalRenderer';
-import { buildPlayerRig, countRigDrawMeshes, kitFor, type KitColors } from './PlayerRig';
+import { buildPlayerRig, countRigDrawMeshes, isSharedRigMaterial, kitFor, type KitColors, type RigDetail } from './PlayerRig';
 import { PlayerAnimator, type AnimState } from './PlayerAnimator';
 import { perfTelemetry } from './PerfTelemetry';
 import { BallRenderer } from './BallRenderer';
@@ -61,6 +61,48 @@ interface Actor {
   gkKind: 'HOME_GK' | 'AWAY_GK';
   isGk: boolean;
   shirtNumber: number;
+  /** FC Mobile skin pass: floating name label sprite above the head. */
+  label: THREE.Sprite;
+  labelCanvas: HTMLCanvasElement;
+  labelTexture: THREE.CanvasTexture;
+  /** Realistic-models pass: this actor's current LOD tier (distance
+   *  switching rebuilds the rig at most twice per 30-frame window). */
+  detail: RigDetail;
+}
+
+/** Draw (or redraw) a player's name onto his label sprite canvas:
+ *  small white bold text with a soft dark shadow, no pill — the
+ *  reference match frame's bare floating name tag. */
+function drawNameLabel(a: Pick<Actor, 'labelCanvas' | 'labelTexture'>, name: string): void {
+  const canvas = a.labelCanvas;
+  const g = canvas.getContext('2d');
+  if (!g) return;
+  g.clearRect(0, 0, canvas.width, canvas.height);
+  g.font = '700 30px Barlow, "Noto Sans Bengali", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(0,0,0,0.85)';
+  g.shadowBlur = 5;
+  g.shadowOffsetY = 2;
+  g.fillStyle = '#ffffff';
+  g.fillText(name, canvas.width / 2, canvas.height / 2);
+  a.labelTexture.needsUpdate = true;
+}
+
+function makeNameLabel(name: string): Pick<Actor, 'label' | 'labelCanvas' | 'labelTexture'> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 56;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.anisotropy = 2;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const label = new THREE.Sprite(material);
+  label.scale.set(3.6, 0.79, 1);
+  label.renderOrder = 20;
+  label.visible = false;
+  const parts = { label, labelCanvas: canvas, labelTexture: texture };
+  drawNameLabel(parts, name);
+  return parts;
 }
 
 function pickSquads(): { home: PlayerTemplate[]; away: PlayerTemplate[] } {
@@ -234,17 +276,22 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
       templates.forEach((tpl, i) => {
         const slot = formation.slots[i]!;
         const isGk = tpl.position === 'GK';
-        const rig = buildPlayerRig(tpl.appearance, isGk ? kitFor(gkKind, homeKit, awayKit) : kit, tpl.shirtNumber ?? i + 1, tpl.shortName, rigDetail);
+        const rig = buildPlayerRig(tpl.appearance, isGk ? kitFor(gkKind, homeKit, awayKit) : kit, tpl.shirtNumber ?? i + 1, tpl.shortName, rigDetail, { gk: isGk });
         const baseX = mirror * ((slot.nx - 0.5) * 105) * 0.92;
         const baseZ = ((slot.ny - 0.5) * 68) * 0.92 * (mirror < 0 ? -1 : 1);
         rig.group.position.set(baseX, 0, baseZ);
         rig.group.rotation.y = mirror > 0 ? Math.PI / 2 : -Math.PI / 2;
         sm.scene.add(rig.group);
+        const labelParts = makeNameLabel(tpl.shortName);
+        labelParts.label.position.set(baseX, 2.2, baseZ);
+        sm.scene.add(labelParts.label);
         actors.push({
           rig, animator: new PlayerAnimator(tpl.preferredFoot),
           baseX, baseZ, phase: i * 1.37, patrol: isGk ? 0.3 : 0.8 + (i % 4) * 0.45,
           yaw: mirror > 0 ? Math.PI / 2 : -Math.PI / 2,
           templateId: tpl.id, kit, gkKind, isGk, shirtNumber: tpl.shirtNumber ?? i + 1,
+          detail: rigDetail,
+          ...labelParts,
         });
       });
     };
@@ -252,7 +299,11 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
     // Phase 06: rebuild one actor's rig in place when a live substitution
     // swaps his template (new face, hair, shirt name/number) — transform and
     // animation state carry over, old geometry/materials are disposed.
-    const rebuildActor = (idx: number, tpl: PlayerTemplate) => {
+    // Realistic-models pass: also used by the distance-LOD switch, which
+    // passes an explicit detail tier. The dispose walk MUST skip the
+    // shared rig materials (plate/face atlases, vertex-colour mats) —
+    // disposing one here corrupts every other rig's textures.
+    const rebuildActor = (idx: number, tpl: PlayerTemplate, detail: RigDetail = actors[idx]?.detail ?? rigDetail) => {
       const a = actors[idx];
       if (!a) return;
       const old = a.rig;
@@ -261,7 +312,8 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
         a.isGk ? kitFor(a.gkKind, kitState.home, kitState.away) : a.kit,
         a.shirtNumber,
         tpl.shortName,
-        rigDetail,
+        detail,
+        { gk: a.isGk },
       );
       rig.group.position.copy(old.group.position);
       rig.group.rotation.copy(old.group.rotation);
@@ -271,6 +323,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
           o.geometry.dispose();
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           mats.forEach((m) => {
+            if (isSharedRigMaterial(m)) return;
             const std = m as THREE.MeshStandardMaterial;
             std.map?.dispose();
             m.dispose();
@@ -281,6 +334,8 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
       a.rig = rig;
       a.animator = new PlayerAnimator(tpl.preferredFoot);
       a.templateId = tpl.id;
+      a.detail = detail;
+      drawNameLabel(a, tpl.shortName);
     };
     makeTeam(squads.home, homeKit, 'HOME_GK', 1);
     makeTeam(squads.away, awayKit, 'AWAY_GK', -1);
@@ -365,6 +420,16 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
       last = now;
       const dt = Number.isFinite(rawDt) ? Math.min(0.05, Math.max(0, rawDt)) : 0;
       elapsed += dt;
+      // Name labels default off each frame; the active sim branch below
+      // lights up the controlled player, the ball carrier and the pass
+      // target (the reference frame's floating name tags).
+      for (const a of actors) a.label.visible = false;
+      const showLabel = (idx: number) => {
+        const a = actors[idx];
+        if (!a) return;
+        a.label.visible = true;
+        a.label.position.set(a.rig.group.position.x, a.rig.group.position.y + 2.25, a.rig.group.position.z);
+      };
       fpsFrames += 1; fpsTime += dt;
       if (fpsTime >= 0.5) { onFps(Math.round(fpsFrames / fpsTime)); fpsFrames = 0; fpsTime = 0; }
 
@@ -386,6 +451,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
           a.rig.group.position.x = p.x;
           a.rig.group.position.z = p.z;
           a.rig.group.rotation.y = p.yaw;
+          a.animator.skillId = null; // replay frames don't carry skill flavour
           a.animator.setState(p.anim);
           a.animator.update(a.rig, dt, p.speed);
         }
@@ -423,6 +489,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
             a.rig.group.rotation.y = lerpYaw(prev.yaw, curr.yaw, alpha);
           }
           a.animator.diveDirection = p.diveDir;
+          a.animator.skillId = p.skill;
           a.animator.setState(p.anim);
           a.animator.update(a.rig, dt, p.speed);
         }
@@ -474,6 +541,16 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
         const passRig = scrimmage.passTargetGlobal >= 0 ? actors[scrimmage.passTargetGlobal]?.rig.group.position : undefined;
         if (passRig) overlays.setPassTarget(passRig.x, passRig.z, elapsed);
         else overlays.hidePassTarget();
+        // Floating name tags: controlled player + ball carrier + target.
+        showLabel(scrimmage.activeGlobal);
+        let carrierIdx = -1;
+        let carrierDist = Infinity;
+        scrimmage.players.forEach((p, i) => {
+          const d = Math.hypot(p.x - scrimmage.ballPos.x, p.z - scrimmage.ballPos.z);
+          if (d < carrierDist) { carrierDist = d; carrierIdx = i; }
+        });
+        if (carrierIdx >= 0 && carrierDist < 2.4) showLabel(carrierIdx);
+        if (scrimmage.passTargetGlobal >= 0) showLabel(scrimmage.passTargetGlobal);
         // Phase 05: VAR offside line + free-kick trajectory preview.
         overlays.setOffsideLine(scrimmage.offsideLineX);
         if (scrimmage.trajectory && scrimmage.trajectory.length > 1) {
@@ -526,6 +603,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
         ball.trailMode = practice.shotInFlight
           ? practice.shotType === 'POWER' ? 'POWER' : practice.shotType === 'FINESSE' || practice.shotType === 'CHIP' ? 'FINESSE' : 'NONE'
           : 'NONE';
+        showLabel(practice.activeIndex);
         // Impact pulses from the sim: post ping shake + goal celebration.
         if (practice.impactPulse !== lastImpactPulse) {
           lastImpactPulse = practice.impactPulse;
@@ -643,6 +721,27 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
         // against this number, never a synthetic constant.
         perfTelemetry.sampleRenderer(sm.renderer.info, rigMeshes, qualityRef.current);
         (window as unknown as { __strikerPerf?: unknown }).__strikerPerf = perfTelemetry.snapshot();
+        // Distance LOD (spec §3.3): every 30 frames, at most 2 rig
+        // rebuilds, never mid-action and never during a replay. Near
+        // players get FULL (MEDIUM/HIGH), far players DISTANT.
+        if (!replayOn) {
+          let rebuilt = 0;
+          const camPos = sm.camera.position;
+          for (let i = 0; i < actors.length && rebuilt < 2; i += 1) {
+            const a = actors[i];
+            if (!a) continue;
+            const st = a.animator.state;
+            if (st === 'KICK' || st === 'SHOOT' || st === 'SLIDE_TACKLE' || st === 'PASS_KICK' || st === 'STAND_TACKLE' || st === 'SKILL') continue;
+            const dist = Math.hypot(a.rig.group.position.x - camPos.x, a.rig.group.position.z - camPos.z);
+            const want: RigDetail = rigDetail === 'LOW'
+              ? (dist > 25 ? 'DISTANT' : 'LOW')
+              : dist < 12 ? 'FULL' : dist <= 25 ? 'LOW' : 'DISTANT';
+            if (want !== a.detail) {
+              const tpl = getPlayerById(a.templateId);
+              if (tpl) { rebuildActor(i, tpl, want); rebuilt += 1; }
+            }
+          }
+        }
       }
     };
     const loop = (now: number) => {

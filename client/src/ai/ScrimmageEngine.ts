@@ -8,7 +8,7 @@
 import { PITCH } from '../core/constants';
 import { matchEventBus } from '../core/EventBus';
 import { createVec3, mulberry32, type Vec3 } from '../core/math';
-import type { AnimState } from '../rendering/PlayerAnimator';
+import type { AnimState, SkillAnimId } from '../rendering/PlayerAnimator';
 import { InputManager, type GameAction } from '../controls/InputManager';
 import { chooseDirectionalSwitch, chooseSwitchTarget } from '../controls/PlayerSwitcher';
 import { getFormationById } from '../data/Formations';
@@ -63,6 +63,9 @@ export interface ActiveSetPiece {
 
 export interface ScrimmagePlayerRender {
   x: number; z: number; yaw: number; speed: number; anim: AnimState; diveDir: number;
+  /** Realistic-models pass: the active skill-move flavour while the
+   *  SKILL anim plays (null = no skill move in progress). */
+  skill: SkillAnimId | null;
   /** Epic P0-6: real stamina for the active-player arc (was a fixed 0.82). */
   stamina: number;
 }
@@ -285,6 +288,13 @@ export class ScrimmageEngine {
   private celebrationMates: number[] = [];
   private lastPassAnimGlobal = -1;
   private lastPassAnimTimer = 0;
+  /** Realistic-models pass: the SHOOT anim plays for the shooter (user
+   *  and AI alike) — shots use the SHOOT state, not the generic KICK. */
+  private lastShotAnimGlobal = -1;
+  private lastShotAnimTimer = 0;
+  /** Slide-tackle ANIM hold (0.7 s, spec §2.3) — longer than the physics
+   *  slideTimer (0.55 s) so the pose completes before the player rises. */
+  private readonly slideAnimTimers = new Float32Array(22);
   private pendingKickoffSide: TeamSide = 'HOME';
   private secondPressUntil = -1;
   private gkRushUntil = -1;
@@ -350,7 +360,7 @@ export class ScrimmageEngine {
       enabled: true,
       ballPos: createVec3(0, 0.11, 0), ballVel: createVec3(), ballAngVel: createVec3(),
       shotInFlight: false, shotType: null,
-      players: this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, stamina: 1 })),
+      players: this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, skill: null, stamina: 1 })),
       activeGlobal: this.activeTeamIndex, secondPresserGlobal: -1, passTargetGlobal: -1,
       switchPulse: 0, containing: false,
       impactPulse: 0, goalPulse: 0, trajectory: null, offsideLineX: null,
@@ -506,7 +516,7 @@ export class ScrimmageEngine {
     this.homeSquad = xi;
     this.homeBenchTemplates = benchTemplates.length > 0 ? benchTemplates : null;
     this.buildSlots();
-    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, stamina: 1 }));
+    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, skill: null, stamina: 1 }));
     this.renderState.playerTemplateIds = this.slots.map((s) => s.kin.template.id);
     this.buildBench();
     this.kickoffReset('HOME');
@@ -522,7 +532,7 @@ export class ScrimmageEngine {
   applyAwaySquad(xi: PlayerTemplate[] | null): void {
     this.awaySquad = xi && xi.length === 11 ? xi : null;
     this.buildSlots();
-    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, stamina: 1 }));
+    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, skill: null, stamina: 1 }));
     this.renderState.playerTemplateIds = this.slots.map((s) => s.kin.template.id);
     this.buildBench();
     this.kickoffReset('HOME');
@@ -563,7 +573,7 @@ export class ScrimmageEngine {
     this.tactical.HOME.setFormation(f);
     this.tactical.AWAY.setFormation(f);
     this.buildSlots();
-    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, stamina: 1 }));
+    this.renderState.players = this.slots.map(() => ({ x: 0, z: 0, yaw: 0, speed: 0, anim: 'IDLE' as AnimState, diveDir: 1, skill: null, stamina: 1 }));
     this.renderState.playerTemplateIds = this.slots.map((s) => s.kin.template.id);
     this.buildBench();
     this.kickoffReset('HOME');
@@ -939,6 +949,9 @@ export class ScrimmageEngine {
   }
 
   private executeShot(carrier: Slot, aimZ: number, power: number, shotType: ShotType, xg: number): void {
+    // Realistic-models pass: every shot (user or AI) plays the SHOOT anim.
+    this.lastShotAnimGlobal = this.slots.indexOf(carrier);
+    this.lastShotAnimTimer = 0.6;
     const goalX = opponentGoalX(carrier.side);
     const from = this.ball.state.pos;
     const aimDir = { x: goalX - from.x, y: 0, z: aimZ - from.z };
@@ -1656,6 +1669,7 @@ export class ScrimmageEngine {
     this.userLaneCounts.RIGHT *= 1 - dt * 0.02;
     if (this.passGraceTimer > 0) this.passGraceTimer -= dt;
     if (this.lastPassAnimTimer > 0) this.lastPassAnimTimer -= dt;
+    if (this.lastShotAnimTimer > 0) this.lastShotAnimTimer -= dt;
     if (this.gkRushUntil > 0 && this.elapsed > this.gkRushUntil) {
       const gk = this.slots.find((s) => s.side === 'HOME' && s.gk);
       if (gk?.gk) gk.gk.manualRush = false;
@@ -2382,13 +2396,25 @@ export class ScrimmageEngine {
       } else {
         p.diveDir = 1;
         const celebrating = this.goalResetTimer > 0 && this.lastScorerGlobal >= 0;
+        // Slide ANIM hold: the pose runs 0.7 s even though the physics
+        // slide ends at 0.55 s (spec §2.3) — physics untouched.
+        if (s.kin.slideTimer > 0) this.slideAnimTimers[i] = 0.7;
+        else if ((this.slideAnimTimers[i] ?? 0) > 0) this.slideAnimTimers[i] = (this.slideAnimTimers[i] ?? 0) - 1 / 60;
+        // The active skill move (user only) picks the SKILL pose flavour.
+        const moveId = this.skills.isActive && i === this.activeTeamIndex ? this.skills.activeMove?.id : undefined;
+        p.skill = moveId === 'ROULETTE' ? 'ROULETTE'
+          : moveId === 'KNOCK_ON' || moveId === 'RAINBOW_FLICK' || moveId === 'HEEL_TO_HEEL' ? 'FLICK'
+          : moveId === 'BALL_ROLL' || moveId === 'LANE_CHANGE' ? 'STEPOVER'
+          : null;
         p.anim = this.wallJumpTimer > 0 && this.wallGlobalsCache.includes(i) ? 'HEADER_JUMP'
-          : s.kin.slideTimer > 0 ? 'SLIDE_TACKLE'
+          : (this.slideAnimTimers[i] ?? 0) > 0 ? 'SLIDE_TACKLE'
           : celebrating && i === this.lastScorerGlobal ? signatureCelebration(s.kin.template.id)
           : celebrating && this.celebrationMates.includes(i) ? 'CELEBRATE_EMBRACE'
           : celebrating && s.side !== this.lastScoringSide ? 'IDLE' // conceding side: heads down
-          : this.pendingUserShot && i === this.activeTeamIndex ? 'KICK'
+          : this.pendingUserShot && i === this.activeTeamIndex ? 'SHOOT'
+          : i === this.lastShotAnimGlobal && this.lastShotAnimTimer > 0 ? 'SHOOT'
           : i === this.lastPassAnimGlobal && this.lastPassAnimTimer > 0 ? 'PASS_KICK'
+          : moveId ? 'SKILL'
           : s.kin.speed > 5.0 ? 'SPRINT'
           : s.kin.speed > 1.8 ? 'JOG'
           : s.kin.speed > 0.4 ? 'WALK'

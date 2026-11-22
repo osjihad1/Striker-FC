@@ -10,7 +10,7 @@
 // Tier-20 Star Pass grant of that pack), never from regular packs or the
 // market. Everyone else flows through the normal pack / training systems.
 
-import type { CoreStats, FaceAppearance, PlayStyleId, Position, Rarity } from '../core/types';
+import type { CelebrationState, CoreStats, FaceAppearance, PlayStyleId, Position, Rarity } from '../core/types';
 import { positionGroup } from '../core/types';
 import type { MarqueeSeed } from './seedDatabase';
 
@@ -166,12 +166,12 @@ export const ICON_IDS: ReadonlySet<string> = new Set([
  *  star identifiable by face alone on the shared rig (Messi's full beard is
  *  the #1 fix). Applied over the tuple appearance in tupleToSeed. */
 export const FACE_OVERRIDES: Record<string, Partial<FaceAppearance>> = {
-  rw_messi: { beardStyle: 'FULL', beardColor: '#4a2c1a', faceWidth: 1.02, jawWidth: 1.05, browStyle: 'STRAIGHT' },
-  rw_salah: { beardStyle: 'FULL', beardColor: '#111111', hairStyle: 'CURLY_TOP', faceWidth: 1.0, cheekbone: 1.08 },
-  rw_ronaldo: { beardStyle: 'STUBBLE', beardColor: '#1c1917', jawWidth: 1.14, faceWidth: 1.08, jawLength: 1.06, browStyle: 'THICK', muscle: 1.1 },
-  rw_mbappe: { faceWidth: 0.92, cheekbone: 1.12, jawLength: 1.04, hairStyle: 'BUZZ', eyeSize: 1.06 },
-  rw_haaland: { hairStyle: 'TOPKNOT', jawLength: 1.12, faceWidth: 0.98, muscle: 1.15, shoulderWidth: 1.12 },
-  rw_neymar: { headband: true, sleeveTattoo: true, hairStyle: 'FRINGE', faceWidth: 0.94 },
+  rw_messi: { beardStyle: 'FULL', beardColor: '#4a2c1a', faceWidth: 1.02, jawWidth: 1.05, browStyle: 'STRAIGHT', faceShape: 'OVAL', eyeColor: '#6b4423' },
+  rw_salah: { beardStyle: 'FULL', beardColor: '#111111', hairStyle: 'CURLY_TOP', faceWidth: 1.0, cheekbone: 1.08, faceShape: 'LONG', hairTexture: 'CURLY' },
+  rw_ronaldo: { beardStyle: 'STUBBLE', beardColor: '#1c1917', jawWidth: 1.14, faceWidth: 1.08, jawLength: 1.06, browStyle: 'THICK', muscle: 1.1, faceShape: 'SQUARE', eyeColor: '#4a3520' },
+  rw_mbappe: { faceWidth: 0.92, cheekbone: 1.12, jawLength: 1.04, hairStyle: 'SHORT', eyeSize: 1.06, faceShape: 'OVAL' },
+  rw_haaland: { hairStyle: 'LONG', jawLength: 1.12, faceWidth: 0.98, muscle: 1.15, shoulderWidth: 1.12, faceShape: 'LONG', eyeColor: '#4a6fa5' },
+  rw_neymar: { headband: true, sleeveTattoo: true, faceWidth: 0.94, faceShape: 'OVAL' },
   rw_vinicius: { hairStyle: 'BRAIDS', faceWidth: 0.95, cheekbone: 1.06 },
   rw_maradona: { hairStyle: 'CURLY_TOP', faceWidth: 1.06, jawWidth: 1.08, muscle: 1.08 },
   rw_pele: { faceWidth: 1.04, jawWidth: 1.06, browStyle: 'THICK' },
@@ -182,7 +182,21 @@ export const FACE_OVERRIDES: Record<string, Partial<FaceAppearance>> = {
   rw_kane: { jawWidth: 1.06, faceWidth: 1.03 },
   rw_son: { hairStyle: 'SIDEPART', faceWidth: 0.97 },
   rw_debruyne: { beardStyle: 'SHORT', beardColor: '#b45309', faceWidth: 1.02 },
-  rw_bellingham: { hairStyle: 'BUZZ', cheekbone: 1.05, muscle: 1.05 },
+  rw_bellingham: { cheekbone: 1.05, muscle: 1.05, faceShape: 'SQUARE' },
+};
+
+/** Realistic-models pass (spec §2.5): signature celebrations per star,
+ *  carried on PlayerTemplate.celebration and read by the match engine's
+ *  celebration picker and the showcase cycle. Mirrors the engine's
+ *  SIGNATURE_CELEBRATIONS table — keep the two in step. */
+export const STAR_CELEBRATIONS: Record<string, CelebrationState> = {
+  rw_messi: 'CELEBRATE_POINT_SKY',
+  rw_ronaldo: 'CELEBRATE_SIU',
+  rw_lewandowski: 'CELEBRATE_ARMS_CROSSED',
+  rw_mbappe: 'CELEBRATE_ARMS_CROSSED',
+  rw_maradona: 'CELEBRATE_ARMS_OUT',
+  rw_pele: 'CELEBRATE_FIST_PUMP',
+  rw_neymar: 'CELEBRATE_KNEEL_POINT',
 };
 
 function tupleToSeed(nation: NationDef, t: RealTuple): RealPlayerSeed {

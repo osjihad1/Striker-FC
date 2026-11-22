@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SafeAreaTopScrim } from "@hatch/space-sdk/client";
 import { GameLoop } from "./core/GameLoop";
+import { lockLandscape } from "./core/OrientationLock";
 import { matchEventBus } from "./core/EventBus";
 import { createVec3, mulberry32, normalizeSafe } from "./core/math";
 import { PITCH, BALL_CONST, RARITY_COLORS, MENTALITY_CONFIG } from "./core/constants";
@@ -14,7 +15,7 @@ import { EXPECTED_PLAYER_COUNT, getAllPlayers, getPlayerById } from "./data/Play
 import { getNationalTeam, runNationsLab, type NationalTeam } from "./data/NationalTeams";
 import { ALL_CLUBS, getClubTeam, runClubsLab, type ClubTeam } from "./data/Clubs";
 import { SEED_CLUBS } from "./data/seedDatabase";
-import { getAllFormations } from "./data/Formations";
+import { getAllFormations, getFormationById } from "./data/Formations";
 import { PLAY_STYLES, getPlayStyle } from "./data/PlayStyles";
 import { getAllPacks, QUESTS, SEASON_PASS_TIERS } from "./data/PacksAndQuests";
 import { StadiumScene } from "./rendering/StadiumScene";
@@ -119,6 +120,7 @@ import { runDailyRewardLab } from "./meta/DailyRewardService";
 import { StoreAndWalkoutScreen } from "./ui/screens/StoreAndWalkoutScreen";
 import { TransferMarketScreen } from "./ui/screens/TransferMarketScreen";
 import { QuestsAndPassScreen } from "./ui/screens/QuestsAndPassScreen";
+import { LeaguesScreen } from "./ui/screens/LeaguesScreen";
 import type { MatchStatsSheet } from "./rules/MatchStatsTracker";
 
 // ---------------------------------------------------------------------------
@@ -321,6 +323,8 @@ interface MatchHudStaticProps {
   mentality: Mentality;
   onMentality: (m: Mentality) => void;
   showMentality: boolean;
+  formationTag?: string;
+  onFormationTap?: () => void;
   banner: HudBanner | null;
   advantageSec: number;
   varActive: boolean;
@@ -359,7 +363,7 @@ function MatchHudLive(props: MatchHudStaticProps) {
 // Tabs
 // ---------------------------------------------------------------------------
 
-type TabId = "hub" | "modes" | "stadium" | "squad" | "store" | "market" | "quests" | "players" | "data" | "settings" | "events" | "training" | "nations" | "clubs" | "help";
+type TabId = "hub" | "modes" | "stadium" | "squad" | "store" | "market" | "quests" | "players" | "data" | "settings" | "events" | "training" | "nations" | "clubs" | "help" | "leagues";
 
 /** Phase 08: the classic sandbox modes plus the five mode sessions. */
 type PlayMode = "MATCH" | "SCRIMMAGE" | "PRACTICE" | "H2H" | "VSA" | "MANAGER" | "TOURNAMENT" | "SKILL" | "FRIENDLY" | "ATTACK" | "DEFEND";
@@ -484,6 +488,9 @@ export function App() {
   // Lobby redesign: the FC Mobile-style bottom bar carries five destinations;
   // everything else lives in its "More" sheet.
   const [moreOpen, setMoreOpen] = useState(false);
+  // Bottom-nav Exchange tab: lands on the Store scrolled to the Exchange
+  // panel (the signal bumps so re-tapping re-scrolls).
+  const [storeFocusExchange, setStoreFocusExchange] = useState(0);
   // The verification labs below are heavy headless simulations (a 60s AI
   // match, a full two-half rules match, a 30s QA sim…). They used to run
   // inside useMemo during the FIRST render, blocking the main thread before
@@ -549,6 +556,9 @@ export function App() {
   const simTime = useMatchHudStore((s) => s.simTimeSeconds);
   const loopRunning = useMatchHudStore((s) => s.loopRunning);
   const mentality = useMatchHudStore((s) => s.mentality);
+  // FC Mobile skin pass: the mentality switcher hides behind the
+  // formation tag pill (top-right) instead of competing with it.
+  const [mentalityOpen, setMentalityOpen] = useState(false);
 
   const [eventLog, setEventLog] = useState<string[]>([]);
   const [resetNote, setResetNote] = useState<string | null>(null);
@@ -663,6 +673,9 @@ export function App() {
   const bannerTimerRef = useRef<number | null>(null);
   const [commentaryLines, setCommentaryLines] = useState<string[]>([]);
   const [pauseOpen, setPauseOpen] = useState(false);
+  // Immersive shell: the panels that used to sit under the pitch in the page
+  // scroll now live in this Match Centre sheet over the full-screen pitch.
+  const [centreOpen, setCentreOpen] = useState(false);
   const [subTick, setSubTick] = useState(0);
   const lastShotPowerRef = useRef(0);
   const showBanner = (b: Omit<HudBanner, "id">, holdMs = 3800) => {
@@ -2198,6 +2211,12 @@ export function App() {
     };
   }, [tab, scrimmagePaused]);
 
+  // Landscape-first: lock the device to landscape on launch, and retry when
+  // a match starts (the web attempt needs a user gesture — entering a match
+  // follows taps; the APK locks via the plugin + manifest regardless).
+  useEffect(() => { lockLandscape(); }, []);
+  useEffect(() => { if (tab === "stadium") lockLandscape(); }, [tab]);
+
   // Phase 10: portrait detection for the landscape prompt on narrow phones.
   const [portraitNarrow, setPortraitNarrow] = useState(false);
   const [rotateDismissed, setRotateDismissed] = useState(false);
@@ -2598,7 +2617,7 @@ export function App() {
 
   if (flowStage !== "game") {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg)]">
+      <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--bg)]">
         {flowStage === "splash" && <SplashScreen onDone={() => setFlowStage("loading")} />}
         {flowStage === "loading" && <LoadingScreen ready={profileLoaded} onDone={() => setFlowStage("login")} />}
         {flowStage === "login" && (
@@ -2616,7 +2635,8 @@ export function App() {
   // has founded his club (existing saves pass through it once, prefilled).
   if (profile && !profile.onboarded) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-[var(--bg)]">
+      <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--bg)]">
+        <div className="app-scroll min-h-0 flex-1">
         <ClubCreationScreen
           profile={profile}
           onDone={(next, startTutorial) => {
@@ -2624,17 +2644,26 @@ export function App() {
             if (startTutorial) launchTutorial();
           }}
         />
+        </div>
       </div>
     );
   }
 
+  // Immersive shell state: while a match is live (stadium tab, no end
+  // screen yet) the pitch owns the whole viewport — the menu scroll region
+  // and the bottom nav yield to it. Everywhere else the shell is a pinned
+  // flex column: content scrolls only inside .app-scroll, nav stays pinned.
+  const inMatch = tab === "stadium" && !matchEnd;
+
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 pb-32">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <SafeAreaTopScrim />
       {/* Epic fix round (P1-16): skip link — keyboard users jump straight
           past the navigation to the main content. */}
       <a href="#striker-main" className="skip-link">Skip to main content</a>
-      <main id="striker-main" tabIndex={-1} className="outline-none">
+      <main id="striker-main" tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
+      <div className={inMatch ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "app-scroll min-h-0 flex-1"}>
+      <div className={inMatch ? "flex min-h-0 flex-1 flex-col" : "mx-auto w-full max-w-6xl px-3 pb-10 sm:px-4"}>
 
       {/* Diagnostics (release notes, engine telemetry, mentality sandbox,
           verification checks, wallet mirror) live under Engine Data — the
@@ -2822,9 +2851,11 @@ export function App() {
         />
       )}
       {tab === "stadium" && !matchEnd && (
-        <section aria-label="3D stadium" className="mt-5">
-          {/* Phase 04: mode toggle + live scrimmage score strip */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+        <section aria-label="3D stadium" className="relative flex min-h-0 flex-1 flex-col">
+          {/* Phase 04: mode toggle + live scrimmage score strip — overlaid on
+              the top edge of the full-screen pitch like the HUD; the pitch
+              itself owns the entire viewport underneath it. */}
+          <div className="absolute inset-x-0 top-0 z-30 flex flex-wrap items-center gap-2 px-2 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))]" style={{ background: "linear-gradient(180deg, rgba(3,6,14,0.88) 0%, rgba(3,6,14,0.55) 70%, rgba(3,6,14,0) 100%)" }}>
             <div className="flex overflow-hidden rounded-lg border border-[var(--border)]" role="group" aria-label="Play mode">
               {(["MATCH", "SCRIMMAGE", "PRACTICE"] as const).map((m) => (
                 <button
@@ -2927,8 +2958,16 @@ export function App() {
                 <span className="text-xs text-[var(--dim)]">{t('panel.gk')}: {scrimmageStats?.homeGkState ?? "—"} / {scrimmageStats?.awayGkState ?? "—"}</span>
               </div>
             )}
+            <button
+              type="button"
+              aria-expanded={centreOpen}
+              onClick={() => setCentreOpen((v) => !v)}
+              className="rounded-lg border border-[var(--gold)]/60 bg-black/60 px-3 py-2 font-display text-base font-semibold uppercase tracking-wider text-[var(--gold)] backdrop-blur-sm"
+            >
+              {centreOpen ? "Close Centre" : "Match Centre"}
+            </button>
           </div>
-          <div className="relative h-[68vh] min-h-[380px] w-full touch-none overflow-hidden rounded-xl border border-[var(--border)] bg-black">
+          <div className="absolute inset-0 touch-none overflow-hidden bg-black">
             <ErrorBoundary
               fallback={(reset) => (
                 <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[#0a120c] px-6 text-center" role="alert">
@@ -3079,7 +3118,18 @@ export function App() {
                   : (clubs.find((c) => c.id === "man_sky") ?? clubs[1]!)}
                 mentality={mentality}
                 onMentality={(m) => hudStore.getState().setMentality(m)}
-                showMentality={playMode !== "PRACTICE" && playMode !== "MANAGER"}
+                showMentality={mentalityOpen && playMode !== "PRACTICE" && playMode !== "MANAGER"}
+                formationTag={(() => {
+                  const fname = profile ? (getFormationById(profile.activeFormationId)?.name ?? '4-3-3') : '4-3-3';
+                  const base = fname.split(' ')[0] ?? '4-3-3';
+                  const word = mentality === 'ULTRA_DEFENDING' ? 'Ultra Defensive'
+                    : mentality === 'DEFENDING' ? 'Defensive'
+                    : mentality === 'ATTACKING' ? 'Attacking'
+                    : mentality === 'ULTRA_ATTACKING' ? 'Ultra Attacking'
+                    : 'Holding';
+                  return `${base} ${word}`;
+                })()}
+                onFormationTap={() => setMentalityOpen((v) => !v)}
                 banner={banner}
                 advantageSec={matchView?.advantageSec ?? 0}
                 varActive={matchView?.varActive ?? false}
@@ -3092,14 +3142,14 @@ export function App() {
             {/* Phase 08 VS Attack overlay: chance banner, clock, live opponent ticker. */}
             {playMode === "VSA" && vsaView && (
               <div className="pointer-events-none absolute inset-0 z-30" aria-label="VS Attack overlay">
-                <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
+                <div className="absolute left-1/2 top-[3.4rem] -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
                   <span className="tnum font-display text-xl font-bold text-white">
                     {t('panel.you')} {vsaView.userGoals} – {vsaView.oppGoals} {t('panel.opp')}
                   </span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-emerald-300">{t('panel.secondsLeft', { s: Math.ceil(vsaView.timeLeft) })}</span>
                 </div>
                 {vsaView.phase === "LIVE" && vsaView.quality && (
-                  <div key={vsaView.chanceNumber} className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div key={vsaView.chanceNumber} className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <div
                       className="hud-banner rounded-lg border-2 px-4 py-2 text-center shadow-2xl backdrop-blur-sm"
                       style={{ borderColor: CHANCE_COLORS[vsaView.quality], background: "rgba(0,0,0,0.72)" }}
@@ -3115,7 +3165,7 @@ export function App() {
                   </div>
                 )}
                 {vsaView.phase === "CUT" && vsaView.lastOutcome && (
-                  <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <p className="rounded-lg bg-black/75 px-4 py-2 font-display text-2xl font-bold uppercase tracking-widest text-white backdrop-blur-sm">
                       {vsaOutcomeT(vsaView.lastOutcome)}
                     </p>
@@ -3138,25 +3188,25 @@ export function App() {
                   type="button"
                   onClick={handlePauseButton}
                   aria-label={scrimmagePaused ? t('panel.resumeVsa') : t('panel.pauseVsa')}
-                  className="pointer-events-auto absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
+                  className="pointer-events-auto absolute right-2 top-[3.4rem] flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
                 >
                   {scrimmagePaused ? "▶" : "❚❚"}
                 </button>
                 {scrimmagePaused && (
-                  <p className="absolute inset-x-0 top-28 text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
+                  <p className="absolute inset-x-0 top-[10.4rem] text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
                 )}
               </div>
             )}
             {/* Phase 08 Skill Games overlay: score, stars, clock, live coaching line. */}
             {playMode === "SKILL" && skillView && (
               <div className="pointer-events-none absolute inset-0 z-30" aria-label="Skill game overlay">
-                <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
+                <div className="absolute left-1/2 top-[3.4rem] -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
                   <span className="font-display text-lg font-bold uppercase tracking-wider text-amber-300">{session?.opponentName}</span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-white">{skillView.score} {t('panel.pts')}</span>
                   <span className="ml-2 text-sm" aria-label={`${skillView.stars} stars earned`}>{"★".repeat(skillView.stars)}<span className="text-white/40">{"★".repeat(3 - skillView.stars)}</span></span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-emerald-300">{t('panel.secondsLeft', { s: Math.ceil(skillView.timeLeft) })}</span>
                 </div>
-                <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                   <p aria-live="polite" className="max-w-[92vw] rounded-lg bg-black/70 px-4 py-1.5 text-center text-sm font-semibold text-white backdrop-blur-sm">
                     {skillView.message}
                   </p>
@@ -3165,25 +3215,25 @@ export function App() {
                   type="button"
                   onClick={handlePauseButton}
                   aria-label={scrimmagePaused ? t('panel.resumeSkill') : t('panel.pauseSkill')}
-                  className="pointer-events-auto absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
+                  className="pointer-events-auto absolute right-2 top-[3.4rem] flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
                 >
                   {scrimmagePaused ? "▶" : "❚❚"}
                 </button>
                 {scrimmagePaused && (
-                  <p className="absolute inset-x-0 top-28 text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
+                  <p className="absolute inset-x-0 top-[10.4rem] text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
                 )}
               </div>
             )}
             {/* Attack Mode overlay: points, chance banner, outcome cuts. */}
             {playMode === "ATTACK" && attackView && (
               <div className="pointer-events-none absolute inset-0 z-30" aria-label="Attack Mode overlay">
-                <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
+                <div className="absolute left-1/2 top-[3.4rem] -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
                   <span className="font-display text-lg font-bold uppercase tracking-wider text-orange-300">{t('modes.attackMode')}</span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-white">{attackView.points} {t('panel.pts')}</span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-emerald-300">{t('panel.secondsLeft', { s: Math.ceil(attackView.chanceTimeLeft) })}</span>
                 </div>
                 {attackView.phase === "LIVE" && (
-                  <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <div className="hud-banner rounded-lg border-2 border-orange-400/70 px-4 py-2 text-center shadow-2xl backdrop-blur-sm" style={{ background: "rgba(0,0,0,0.72)" }}>
                       <p className="font-display text-2xl font-bold uppercase leading-none tracking-widest text-orange-300 sm:text-3xl">
                         {t('attack.chanceHead', { r: attackView.round, label: attackRoundLabelT(attackView.round) })}
@@ -3195,7 +3245,7 @@ export function App() {
                   </div>
                 )}
                 {attackView.phase === "CUT" && attackView.lastOutcome && (
-                  <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <p className="rounded-lg bg-black/75 px-4 py-2 text-center font-display text-2xl font-bold uppercase tracking-widest text-white backdrop-blur-sm">
                       {attackView.lastOutcome === "GOAL" ? t('attack.outcomeGoal', { pts: attackView.lastPoints }) : attackView.lastOutcome === "SAVED" ? t('attack.outcomeSaved') : attackView.lastOutcome === "CLEARED" ? t('attack.outcomeCleared') : attackView.lastOutcome === "OUT" ? t('attack.outcomeOut') : t('attack.outcomeTimeUp')}
                       {attackView.lastBonus && <span className="mt-0.5 block text-sm normal-case tracking-normal text-[var(--gold)]">{attackView.lastBonus}</span>}
@@ -3206,25 +3256,25 @@ export function App() {
                   type="button"
                   onClick={handlePauseButton}
                   aria-label={scrimmagePaused ? t('panel.resumeAttack') : t('panel.pauseAttack')}
-                  className="pointer-events-auto absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
+                  className="pointer-events-auto absolute right-2 top-[3.4rem] flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
                 >
                   {scrimmagePaused ? "▶" : "❚❚"}
                 </button>
                 {scrimmagePaused && (
-                  <p className="absolute inset-x-0 top-28 text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
+                  <p className="absolute inset-x-0 top-[10.4rem] text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
                 )}
               </div>
             )}
             {/* Defend Mode overlay: points, wave banner, outcome cuts. */}
             {playMode === "DEFEND" && defendView && (
               <div className="pointer-events-none absolute inset-0 z-30" aria-label="Defend Mode overlay">
-                <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
+                <div className="absolute left-1/2 top-[3.4rem] -translate-x-1/2 rounded-md bg-black/75 px-3 py-1.5 text-center shadow-lg backdrop-blur-sm">
                   <span className="font-display text-lg font-bold uppercase tracking-wider text-sky-300">{t('modes.defendMode')}</span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-white">{defendView.points} {t('panel.pts')}</span>
                   <span className="tnum ml-2 font-display text-xl font-bold text-emerald-300">{t('panel.secondsLeft', { s: Math.ceil(defendView.chanceTimeLeft) })}</span>
                 </div>
                 {defendView.phase === "LIVE" && (
-                  <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <div className="hud-banner rounded-lg border-2 border-sky-400/70 px-4 py-2 text-center shadow-2xl backdrop-blur-sm" style={{ background: "rgba(0,0,0,0.72)" }}>
                       <p className="font-display text-2xl font-bold uppercase leading-none tracking-widest text-sky-300 sm:text-3xl">
                         {t('defend.waveHead', { w: defendView.wave, label: defendWaveLabelT(defendView.wave) })}
@@ -3236,7 +3286,7 @@ export function App() {
                   </div>
                 )}
                 {defendView.phase === "CUT" && defendView.lastOutcome && (
-                  <div className="absolute inset-x-0 top-16 flex justify-center px-3">
+                  <div className="absolute inset-x-0 top-[7.4rem] flex justify-center px-3">
                     <p className="rounded-lg bg-black/75 px-4 py-2 text-center font-display text-2xl font-bold uppercase tracking-widest text-white backdrop-blur-sm">
                       {defendView.lastOutcome === "CONCEDED" ? t('defend.outcomeConceded', { pts: defendView.lastPoints }) : defendView.lastOutcome === "BALL_WON" ? t('defend.outcomeBallWon', { pts: defendView.lastPoints }) : defendView.lastOutcome === "CLEARED" ? t('defend.outcomeCleared', { pts: defendView.lastPoints }) : defendView.lastOutcome === "SURVIVED" ? t('defend.outcomeSurvived', { pts: defendView.lastPoints }) : t('attack.outcomeOut')}
                     </p>
@@ -3246,12 +3296,12 @@ export function App() {
                   type="button"
                   onClick={handlePauseButton}
                   aria-label={scrimmagePaused ? t('panel.resumeDefend') : t('panel.pauseDefend')}
-                  className="pointer-events-auto absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
+                  className="pointer-events-auto absolute right-2 top-[3.4rem] flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black/70 font-display text-base font-bold text-white shadow-lg backdrop-blur-sm"
                 >
                   {scrimmagePaused ? "▶" : "❚❚"}
                 </button>
                 {scrimmagePaused && (
-                  <p className="absolute inset-x-0 top-28 text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
+                  <p className="absolute inset-x-0 top-[10.4rem] text-center font-display text-2xl font-bold uppercase tracking-widest text-white" style={{ textShadow: "0 2px 12px #000" }}>{t('pause.paused')}</p>
                 )}
               </div>
             )}
@@ -3302,7 +3352,7 @@ export function App() {
               onForfeit={forfeitMatch}
               canForfeit={MATCH_FAMILY.includes(playMode) && !(matchView?.fullTime ?? false)}
             />
-            <div className="absolute right-2 top-2 z-10 w-44 rounded-lg border border-white/15 bg-black/70 p-2 backdrop-blur-sm">
+            <div className="absolute right-2 top-[3.4rem] z-10 w-44 rounded-lg border border-white/15 bg-black/70 p-2 backdrop-blur-sm">
               <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--accent)]">
                 Dev Toolbar{showFps && <> · <span className="tnum">{renderFps} FPS</span></>}
               </p>
@@ -3377,6 +3427,23 @@ export function App() {
               </div>
             )}
           </div>
+
+          {/* Match Centre sheet: the panels that used to live under the
+              pitch in the page scroll (match controls, stats sheet, shot
+              map, difficulty, mode panels, practice bar) now slide over the
+              full-screen pitch and scroll inside the sheet only. */}
+          {centreOpen && (
+          <div className="absolute inset-x-0 bottom-0 z-30 max-h-[82%] overflow-y-auto overscroll-contain border-t-2 border-[var(--gold)]/50 bg-[#070d1d]/[0.97] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.65)] backdrop-blur" role="dialog" aria-label="Match centre">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <p className="font-display text-lg font-bold uppercase tracking-widest text-[var(--gold)]">Match Centre</p>
+              <button
+                type="button"
+                onClick={() => setCentreOpen(false)}
+                className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-bold"
+              >
+                Close ✕
+              </button>
+            </div>
 
           {/* Phase 05 full-match panel: state machine controls + complete stats sheet + shot map. */}
           {MATCH_FAMILY.includes(playMode) && matchView && (
@@ -3912,6 +3979,8 @@ export function App() {
             collision and mass-spring nets — with 22 utility-AI players and two trajectory-simulating goalkeepers
             stepped at a fixed 1/60s under the render loop (decisions at 10Hz, steering at 60Hz).
           </p>
+          </div>
+          )}
         </section>
       )}
       {tab === "hub" && profile && (
@@ -3945,6 +4014,7 @@ export function App() {
           profile={profile}
           onCommit={(next) => commitProfile(next)}
           onGoToSquad={() => setTab("squad")}
+          focusExchange={storeFocusExchange}
         />
       )}
       {tab === "store" && !profile && <p className="mt-6 text-sm text-[var(--dim)]">Loading save profile…</p>}
@@ -3963,6 +4033,16 @@ export function App() {
         />
       )}
       {tab === "quests" && !profile && <p className="mt-6 text-sm text-[var(--dim)]">Loading save profile…</p>}
+      {tab === "leagues" && profile && (
+        <LeaguesScreen
+          profile={profile}
+          onGoQuests={() => setTab("quests")}
+          onGoEvents={() => setTab("events")}
+          onGoPlay={() => setTab("modes")}
+          onGoMarket={() => setTab("market")}
+        />
+      )}
+      {tab === "leagues" && !profile && <p className="mt-6 text-sm text-[var(--dim)]">Loading save profile…</p>}
       {tab === "modes" && profile && (
         <PlayModesScreen
           profile={profile}
@@ -4060,21 +4140,28 @@ export function App() {
         />
       )}
 
+      </div>
+      </div>
+
       {/* FC Mobile-style bottom navigation: five pinned destinations with
           live claim badges, plus a More sheet for the remaining sections.
-          Fixed to the viewport bottom with safe-area padding; the page
-          container carries pb-32 so content never hides behind it. */}
+          It is the shell's pinned bottom bar (in-flow, safe-area padded) —
+          content scrolls inside .app-scroll above it, never behind it.
+          During a live match it yields entirely: the pitch owns the screen,
+          and the pause menu / Match Centre carry the exits. */}
+      {!inMatch && (
       <nav
         aria-label="Game sections"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--border)] bg-[#070d1d]/96 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur"
+        className="relative z-40 shrink-0 border-t border-[var(--border)] bg-[#070d1d]/96 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {moreOpen && (
-          <div className="mx-auto grid max-w-5xl grid-cols-3 gap-1.5 border-b border-[var(--border)] px-3 py-2.5 sm:grid-cols-4" aria-label="More sections">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-3 gap-1.5 border-b border-[var(--border)] px-3 py-2.5 sm:grid-cols-4" aria-label="More sections">
             {(
               [
                 ["stadium", t("more.playStadium")],
                 ["events", t("events.events")],
+                ["quests", t("nav.quests")],
                 ["training", t("modes.training")],
                 ["market", t("market.market")],
                 ["players", t("more.playerDatabase")],
@@ -4103,6 +4190,11 @@ export function App() {
                     {claimableSales(profile, Date.now()).length}
                   </span>
                 )}
+                {id === "quests" && claimableQuestCount > 0 && (
+                  <span className="tnum ml-1 rounded-full bg-red-500 px-1.5 text-[10px] font-black text-white">
+                    {claimableQuestCount}
+                  </span>
+                )}
               </button>
             ))}
             <button
@@ -4114,45 +4206,60 @@ export function App() {
             </button>
           </div>
         )}
-        <div className="mx-auto grid max-w-5xl grid-cols-6 px-1">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-8 px-0.5">
           {(
             [
               {
-                id: "hub" as TabId, label: t("nav.home"), badge: 0, active: tab === "hub",
+                key: "hub", label: t("nav.home"), badge: 0, active: tab === "hub",
+                go: () => setTab("hub"),
                 icon: <path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z" fill="currentColor" />,
               },
               {
-                id: "modes" as TabId, label: t("nav.play"), badge: 0, active: tab === "modes" || tab === "stadium",
+                key: "modes", label: t("nav.play"), badge: 0, active: tab === "modes" || tab === "stadium",
+                go: () => setTab("modes"),
                 icon: <path d="M8 5.5v13l11-6.5z" fill="currentColor" />,
               },
               {
-                id: "squad" as TabId, label: t("nav.myTeam"), badge: 0, active: tab === "squad",
+                key: "squad", label: t("nav.myTeam"), badge: 0, active: tab === "squad",
+                go: () => setTab("squad"),
                 icon: <path d="M12 3 4 6v5c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6z" fill="currentColor" />,
               },
               {
-                id: "store" as TabId, label: t("nav.store"), badge: freePackReady ? 1 : 0, active: tab === "store",
-                icon: <path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8zm3.5 0a3.5 3.5 0 0 1 7 0H17a5 5 0 0 0-10 0H8.5z" fill="currentColor" />,
+                key: "leagues", label: t("nav.leagues"), badge: 0, active: tab === "leagues",
+                go: () => setTab("leagues"),
+                icon: <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4zM7 6H4a1 1 0 0 0-1 1c0 2.2 1.8 4 4 4M17 6h3a1 1 0 0 1 1 1c0 2.2-1.8 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />,
               },
               {
-                id: "quests" as TabId, label: t("nav.quests"), badge: claimableQuestCount, active: tab === "quests",
-                icon: <path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6L12 16.7l-5.4 2.9 1.1-6L3.2 9.4l6.1-.8z" fill="currentColor" />,
+                key: "market", label: t("nav.market"), badge: profile ? claimableSales(profile, Date.now()).length : 0, active: tab === "market",
+                go: () => setTab("market"),
+                icon: <><path d="M4 7h13l-1.6 4H6.2L4.6 3.6A1 1 0 0 0 3.6 3H2.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /><circle cx="7" cy="20" r="1.7" fill="currentColor" /><circle cx="16.5" cy="20" r="1.7" fill="currentColor" /><path d="M18.5 3.5v5M16 6h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></>,
+              },
+              {
+                key: "exchange", label: t("nav.exchange"), badge: 0, active: false,
+                go: () => { setTab("store"); setStoreFocusExchange((v) => v + 1); },
+                icon: <path d="M7 4 3.5 7.5 7 11M3.5 7.5H17M17 13l3.5 3.5L17 20M20.5 16.5H7" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />,
+              },
+              {
+                key: "store", label: t("nav.store"), badge: freePackReady ? 1 : 0, active: tab === "store",
+                go: () => setTab("store"),
+                icon: <path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8zm3.5 0a3.5 3.5 0 0 1 7 0H17a5 5 0 0 0-10 0H8.5z" fill="currentColor" />,
               },
             ]
           ).map((item) => (
             <button
-              key={item.id}
+              key={item.key}
               type="button"
               aria-pressed={item.active}
               aria-label={item.badge > 0 ? `${item.label} — ${item.badge} ready to claim` : item.label}
-              onClick={() => { setTab(item.id); setMoreOpen(false); }}
+              onClick={() => { item.go(); setMoreOpen(false); }}
               className="relative flex flex-col items-center gap-0.5 py-2"
               style={{ color: item.active ? "var(--accent)" : "var(--dim)" }}
             >
-              <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden>{item.icon}</svg>
-              <span className="text-[10px] font-black uppercase tracking-wider">{item.label}</span>
-              {item.active && <span aria-hidden className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-[var(--accent)]" />}
+              <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden>{item.icon}</svg>
+              <span className="text-[9px] font-black uppercase tracking-wide">{item.label}</span>
+              {item.active && <span aria-hidden className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-[var(--accent)]" />}
               {item.badge > 0 && (
-                <span className="tnum absolute right-[16%] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9.5px] font-black text-white">
+                <span className="tnum absolute right-[10%] top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9.5px] font-black text-white">
                   {item.badge}
                 </span>
               )}
@@ -4164,7 +4271,7 @@ export function App() {
             aria-label="More sections"
             onClick={() => setMoreOpen((v) => !v)}
             className="relative flex flex-col items-center gap-0.5 py-2"
-            style={{ color: moreOpen || ["stadium", "events", "training", "market", "players", "nations", "clubs", "data", "settings"].includes(tab) ? "var(--accent)" : "var(--dim)" }}
+            style={{ color: moreOpen || ["stadium", "events", "quests", "training", "market", "players", "nations", "clubs", "data", "settings"].includes(tab) ? "var(--accent)" : "var(--dim)" }}
           >
             <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden>
               <circle cx="5" cy="12" r="2.2" fill="currentColor" />
@@ -4175,6 +4282,7 @@ export function App() {
           </button>
         </div>
       </nav>
+      )}
       </main>
     </div>
   );
