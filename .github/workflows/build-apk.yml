@@ -11,6 +11,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download fresh web bundle
+        run: |
+          curl -fL -o /tmp/striker-fc-dist.zip "https://muse.ai/files/1426771400523795/2653797958375100/zf0uivt5o48dl0bbu3u4lhvw/striker-fc-dist.zip"
+          rm -rf dist
+          unzip -o -q /tmp/striker-fc-dist.zip
+          test -f dist/index.html || { echo "DOWNLOAD FAILED: dist/index.html missing"; exit 1; }
+          du -sh dist
+          ls dist/assets | wc -l
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
