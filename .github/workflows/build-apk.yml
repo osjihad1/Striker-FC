@@ -45,11 +45,47 @@ jobs:
       - name: Install JS deps
         run: npm ci --ignore-scripts
 
-      - name: Sync Capacitor web assets
-        run: npx cap sync
+      - name: Sync web assets into Android project
+        run: |
+          mkdir -p android/app/src/main/assets
+          rm -rf android/app/src/main/assets/public
+          cp -r dist android/app/src/main/assets/public
+          test -f android/app/src/main/assets/public/index.html || { echo "SYNC FAILED: public/index.html missing"; exit 1; }
+          cat > android/app/src/main/assets/capacitor.config.json <<'EOF'
+          {
+            "appId": "com.strikerfc.app",
+            "appName": "Striker FC",
+            "webDir": "dist",
+            "backgroundColor": "#0b0e1a",
+            "android": {
+              "allowMixedContent": false,
+              "captureInput": true
+            },
+            "ios": {
+              "contentInset": "never"
+            },
+            "plugins": {
+              "SplashScreen": {
+                "launchShowDuration": 1200,
+                "launchAutoHide": true,
+                "backgroundColor": "#0b0e1a",
+                "androidSplashResourceName": "splash",
+                "androidScaleType": "CENTER_CROP",
+                "showSpinner": false
+              },
+              "StatusBar": {
+                "overlaysWebView": true,
+                "style": "DARK",
+                "backgroundColor": "#0b0e1a"
+              }
+            }
+          }
+          EOF
+          printf '[]' > android/app/src/main/assets/capacitor.plugins.json
+          ls android/app/src/main/assets/public | head
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon 2>&1 | tee /tmp/gradle.log; test ${PIPESTATUS[0]} -eq 0
         working-directory: android
 
       - name: Upload APK
@@ -57,3 +93,11 @@ jobs:
         with:
           name: striker-fc-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Report failure as issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          { echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; echo; echo "--- assets/public ---"; ls android/app/src/main/assets/public 2>&1 | head -20; echo; echo "--- gradle log (last 120 lines) ---"; tail -n 120 /tmp/gradle.log 2>/dev/null || echo "no gradle log"; } > /tmp/failure-report.txt
+          gh issue create --title "APK build failed (run ${{ github.run_id }})" --body-file /tmp/failure-report.txt || echo "could not create issue"
