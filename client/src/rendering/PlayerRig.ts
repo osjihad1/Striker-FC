@@ -28,6 +28,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { CollarStyle, FaceAppearance, KitPattern } from '../core/types';
 import { mulberry32 } from '../core/math';
+import { kitTextureImageFor, kitTextureUrlFor, onKitTextureReady } from './TextureAssets';
 
 export type KitKind = 'HOME' | 'AWAY' | 'HOME_GK' | 'AWAY_GK';
 
@@ -389,6 +390,25 @@ function kitAtlasKey(kit: KitColors): string {
   return `${kit.primary}|${kit.secondary}|${kit.pattern ?? 'SOLID'}|${kit.collarStyle ?? 'CREW'}|${kit.abbr ?? ''}`;
 }
 
+/** Tiles whose photo repaint is already queued (one per kit key). */
+const pendingKitRedraws = new Set<string>();
+
+/** Paint one jersey-atlas tile: the club's photo kit texture
+ *  (client/src/assets/textures/kit-*.jpg, painted in the same 256-tile
+ *  layout as drawJerseyArt) when it has loaded, else the procedural
+ *  pattern — which the photo repaint above replaces on arrival. */
+function paintJerseyTile(ctx: CanvasRenderingContext2D, col: number, row: number, kit: KitColors): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(col * ATLAS_TILE, row * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE);
+  ctx.clip();
+  ctx.translate(col * ATLAS_TILE, row * ATLAS_TILE);
+  const img = kitTextureImageFor(kit);
+  if (img) ctx.drawImage(img, 0, 0, ATLAS_TILE, ATLAS_TILE);
+  else drawJerseyArt(ctx, kit);
+  ctx.restore();
+}
+
 /** UV rect of the kit's atlas tile, drawing the art on first use. */
 function jerseyAtlasRect(kit: KitColors): UvRect | null {
   const key = kitAtlasKey(kit);
@@ -401,13 +421,18 @@ function jerseyAtlasRect(kit: KitColors): UvRect | null {
     atlasKitTiles.set(key, tile);
     const col = tile % ATLAS_COLS;
     const row = Math.floor(tile / ATLAS_COLS);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(col * ATLAS_TILE, row * ATLAS_TILE, ATLAS_TILE, ATLAS_TILE);
-    ctx.clip();
-    ctx.translate(col * ATLAS_TILE, row * ATLAS_TILE);
-    drawJerseyArt(ctx, kit);
-    ctx.restore();
+    paintJerseyTile(ctx, col, row, kit);
+    // Photo not decoded yet: repaint this tile with the photo when it
+    // arrives (the procedural art above is the interim look).
+    const url = kitTextureUrlFor(kit);
+    if (url && !kitTextureImageFor(kit) && !pendingKitRedraws.has(key)) {
+      pendingKitRedraws.add(key);
+      onKitTextureReady(url, () => {
+        const { ctx: ctx2, tex: tex2 } = ensureAtlas();
+        paintJerseyTile(ctx2, col, row, kit);
+        tex2.needsUpdate = true;
+      });
+    }
     tex.needsUpdate = true;
   }
   const col = tile % ATLAS_COLS;

@@ -4,6 +4,7 @@
 // dedicated line plane at +0.02m (polygon offset — zero z-fighting).
 import * as THREE from 'three';
 import { PITCH } from '../core/constants';
+import { GRASS_DAY_URL, GRASS_NIGHT_URL, loadPhotoTexture } from './TextureAssets';
 
 /** Epic fix round (P1-12): pitch textures scale with the graphics tier —
  *  LOW/MEDIUM paint at 1024×512 (a quarter of the texel memory), HIGH and
@@ -123,6 +124,9 @@ export interface PitchBuild {
   group: THREE.Group;
   material: THREE.MeshStandardMaterial;
   update: (time: number) => void;
+  /** Swap the grass photo between the day and night shots. No-op until
+   *  the photos have loaded — the procedural canvas stays until then. */
+  setNight: (night: boolean) => void;
 }
 
 export function buildPitch(quality: 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' = 'HIGH'): PitchBuild {
@@ -142,6 +146,29 @@ export function buildPitch(quality: 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' = 'HIGH'
   mesh.rotation.x = -Math.PI / 2;
   mesh.receiveShadow = true;
   group.add(mesh);
+
+  // Photo grass (textures pass): the 4096px day/night shots replace the
+  // procedural albedo once loaded, downscaled to the tier (LOW/MEDIUM
+  // 1024px, HIGH/ULTRA 2048px — the full source is never uploaded to the
+  // GPU). The procedural canvas above stays as the fallback AND as the
+  // bump/rough source, and the markings plane is untouched.
+  const photoMax = quality === 'LOW' || quality === 'MEDIUM' ? { w: 1024, h: 512 } : { w: 2048, h: 1024 };
+  const photoAniso = quality === 'LOW' ? 2 : 8;
+  let photoDay: THREE.Texture | null = null;
+  let photoNight: THREE.Texture | null = null;
+  let isNight = false;
+  const applyPhoto = () => {
+    const tex = isNight ? photoNight : photoDay;
+    if (tex && material.map !== tex) { material.map = tex; material.needsUpdate = true; }
+  };
+  void loadPhotoTexture(GRASS_DAY_URL, photoMax.w, photoMax.h, photoAniso).then((tex) => {
+    photoDay = tex;
+    applyPhoto();
+  });
+  void loadPhotoTexture(GRASS_NIGHT_URL, photoMax.w, photoMax.h, photoAniso).then((tex) => {
+    photoNight = tex;
+    applyPhoto();
+  });
 
   // Markings on their own transparent canvas plane, lifted +0.02m: crisp, no z-fight.
   const lineCanvas = document.createElement('canvas');
@@ -181,17 +208,20 @@ export function buildPitch(quality: 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA' = 'HIGH'
     cloths.push({ mesh: cloth, phase: i * 1.7 });
   });
 
-  const update = (time: number) => {
-    for (const { mesh: cloth, phase } of cloths) {
-      const pos = cloth.geometry.attributes.position as THREE.BufferAttribute;
-      for (let v = 0; v < pos.count; v += 1) {
-        const vx = pos.getX(v);
-        pos.setZ(v, Math.sin(time * 4 + phase + vx * 5) * 0.09 * (vx / 0.55));
+  return {
+    group,
+    material,
+    update: (time: number) => {
+      for (const { mesh: cloth, phase } of cloths) {
+        const pos = cloth.geometry.attributes.position as THREE.BufferAttribute;
+        for (let v = 0; v < pos.count; v += 1) {
+          const vx = pos.getX(v);
+          pos.setZ(v, Math.sin(time * 4 + phase + vx * 5) * 0.09 * (vx / 0.55));
+        }
+        pos.needsUpdate = true;
+        cloth.geometry.computeVertexNormals();
       }
-      pos.needsUpdate = true;
-      cloth.geometry.computeVertexNormals();
-    }
+    },
+    setNight: (night: boolean) => { isNight = night; applyPhoto(); },
   };
-
-  return { group, material, update };
 }

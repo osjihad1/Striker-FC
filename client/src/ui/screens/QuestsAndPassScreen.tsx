@@ -18,6 +18,7 @@ msUntilWeeklyReset, questComplete, questProgressOf, seasonPassTierReached, weekl
 } from '../../meta/QuestService';
 import { STAR_PASS_PREMIUM_GEMS, buyStarPassPremium, currentSeason } from '../../meta/SeasonService';
 import { PlayerCard } from '../components/PlayerCard';
+import bannerStarPassUrl from '../../assets/art/banner-star-pass.jpg';
 import { formatNumber, t as tr } from '../../i18n/i18n';
 
 function formatDuration(ms: number): string {
@@ -171,7 +172,12 @@ export function QuestsAndPassScreen({
 
   return (
     <section aria-label={tr('quests.title')} className="mt-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+      {/* Trophy & menu art: Star Pass banner behind the header; the plain
+          header stays as the fallback if the photo fails to load. */}
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 p-4">
+        <img src={bannerStarPassUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[50%_60%]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        <div aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(96deg, rgba(4,10,24,0.72) 0%, rgba(4,10,24,0.35) 60%, rgba(4,10,24,0.65) 100%)' }} />
+        <div className="relative flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="font-display text-3xl font-bold uppercase tracking-wide">{tr('quests.title')}</h2>
           <p className="mt-1 max-w-prose text-sm text-[var(--dim)]">
@@ -190,6 +196,7 @@ export function QuestsAndPassScreen({
             </button>
           )}
         </div>
+      </div>
       </div>
 
       {error && <p role="alert" className="mt-3 rounded-lg border border-[var(--danger)] bg-red-950/40 px-3 py-2 text-sm font-medium text-red-200">{error}</p>}

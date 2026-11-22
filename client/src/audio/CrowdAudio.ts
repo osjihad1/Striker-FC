@@ -4,6 +4,8 @@
 // (ball zone, shots, goals) glides both filter cutoffs and band gains with
 // slow setTargetAtTime ramps, so the crowd swells and erupts without clicks.
 
+import { CROWD_LOOPS } from './RecordedAudio';
+
 /** Deterministic pink noise (Paul Kellet's filter) into a plain buffer. */
 export function generatePinkNoise(samples: number, seed = 2026): Float32Array {
   const out = new Float32Array(samples);
@@ -37,10 +39,26 @@ export class CrowdAudio {
   private outGain: GainNode | null = null;
   private excitement = 0.22;
   private started = false;
+  // Recorded layers (overnight asset build): the decoded buffers are cached
+  // after the first fetch so repeat goals cost no network/disk re-read.
+  private ctx: AudioContext | null = null;
+  private bus: GainNode | null = null;
+  private recordedBed: AudioBufferSourceNode | null = null;
+  private cheerBuffer: AudioBuffer | null = null;
+  private chantBuffer: AudioBuffer | null = null;
+  private cheerLoading: Promise<AudioBuffer | null> | null = null;
+  private chantLoading: Promise<AudioBuffer | null> | null = null;
+  private groanBuffer: AudioBuffer | null = null;
+  private groanLoading: Promise<AudioBuffer | null> | null = null;
+  private chantSrc: AudioBufferSourceNode | null = null;
+  private chantGain: GainNode | null = null;
+  private chantTimer: ReturnType<typeof setTimeout> | null = null;
 
   start(ctx: AudioContext, bus: GainNode): void {
     if (this.started) return;
     this.started = true;
+    this.ctx = ctx;
+    this.bus = bus;
     const len = ctx.sampleRate * 3;
     const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
     buffer.copyToChannel(generatePinkNoise(len), 0);
@@ -80,6 +98,180 @@ export class CrowdAudio {
     this.roarGain = roarGain;
     this.outGain = out;
     this.applyExcitement(this.excitement, 0.1);
+    // Recorded bed: fetch + decode the real stadium ambience loop in the
+    // background; when it arrives it takes over from the procedural bed
+    // (which keeps running quietly underneath as a fallback/texture).
+    void this.loadRecordedBed();
+    // Audio-fix (2026-11-22): warm the cheer/chant/groan buffers here, in
+    // the background, the same way the bed is warmed above — otherwise the
+    // first goal pays a fetch + decode (2.5 MB cheer, ~90 s) inside
+    // erupt() and the swell starts seconds late.
+    void this.warmSwellBuffers();
+  }
+
+  /** Background warm-up for the one-shot swell buffers (cheer/chant/groan).
+   *  Each ensure*() caches its buffer, so this is a no-op on repeat starts
+   *  and playCheerSwell/playChantBurst/playGroanSwell replay instantly. */
+  private async warmSwellBuffers(): Promise<void> {
+    try {
+      await Promise.all([
+        this.ensureCheerBuffer(),
+        this.ensureChantBuffer(),
+        this.ensureGroanBuffer(),
+      ]);
+    } catch {
+      // Warm-up is best-effort — the lazy load in each player still works.
+    }
+  }
+
+  private async ensureCheerBuffer(): Promise<AudioBuffer | null> {
+    if (this.cheerBuffer) return this.cheerBuffer;
+    if (!this.cheerLoading) this.cheerLoading = this.loadBuffer(CROWD_LOOPS.cheer);
+    this.cheerBuffer = await this.cheerLoading;
+    return this.cheerBuffer;
+  }
+
+  private async ensureChantBuffer(): Promise<AudioBuffer | null> {
+    if (this.chantBuffer) return this.chantBuffer;
+    if (!this.chantLoading) this.chantLoading = this.loadBuffer(CROWD_LOOPS.chant);
+    this.chantBuffer = await this.chantLoading;
+    return this.chantBuffer;
+  }
+
+  private async ensureGroanBuffer(): Promise<AudioBuffer | null> {
+    if (this.groanBuffer) return this.groanBuffer;
+    if (!this.groanLoading) this.groanLoading = this.loadBuffer(CROWD_LOOPS.groan);
+    this.groanBuffer = await this.groanLoading;
+    return this.groanBuffer;
+  }
+
+  /** Observability for the audio lab: which swell buffers are decoded and
+   *  ready to play instantly (no fetch/decode on the next goal). */
+  get swellBuffersReady(): { cheer: boolean; chant: boolean; groan: boolean } {
+    return {
+      cheer: this.cheerBuffer !== null,
+      chant: this.chantBuffer !== null,
+      groan: this.groanBuffer !== null,
+    };
+  }
+
+  /** Fetch + decode one recorded loop, cached per URL. Null on any failure. */
+  private async loadBuffer(url: string): Promise<AudioBuffer | null> {
+    if (!this.ctx) return null;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await this.ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadRecordedBed(): Promise<void> {
+    if (!this.ctx || !this.bus || this.recordedBed) return;
+    const buf = await this.loadBuffer(CROWD_LOOPS.ambience);
+    if (!buf || !this.ctx || !this.bus || this.recordedBed) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0;
+    src.connect(gain);
+    gain.connect(this.bus);
+    src.start();
+    const t = this.ctx.currentTime;
+    gain.gain.setTargetAtTime(0.85, t, 1.2);
+    // Ease the procedural bed down to a quiet texture underneath.
+    this.outGain?.gain.setTargetAtTime(0.25, t, 1.2);
+    this.recordedBed = src;
+  }
+
+  /** One-shot goal roar: the recorded cheer loop swells in, holds ~6 s,
+   *  then fades out. Cached buffer — repeat goals replay instantly. */
+  private async playCheerSwell(): Promise<void> {
+    if (!this.ctx || !this.outGain) return;
+    this.cheerBuffer = await this.ensureCheerBuffer();
+    if (!this.cheerBuffer || !this.ctx || !this.outGain) return;
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.cheerBuffer;
+      src.loop = true;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain);
+      gain.connect(this.outGain);
+      const t = this.ctx.currentTime;
+      gain.gain.setTargetAtTime(1.0, t, 0.25);
+      gain.gain.setTargetAtTime(0, t + 6.5, 1.0);
+      src.start(t);
+      src.stop(t + 9.5);
+    } catch {
+      // Cheer is a garnish — the procedural eruption already fired.
+    }
+  }
+
+  /** Post-goal chant: the recorded chant loop rides for ~18 s, then fades. */
+  private async playChantBurst(): Promise<void> {
+    if (!this.ctx || !this.outGain || this.chantSrc) return;
+    this.chantBuffer = await this.ensureChantBuffer();
+    if (!this.chantBuffer || !this.ctx || !this.outGain) return;
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.chantBuffer;
+      src.loop = true;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain);
+      gain.connect(this.outGain);
+      src.start();
+      gain.gain.setTargetAtTime(0.55, this.ctx.currentTime, 0.8);
+      this.chantSrc = src;
+      this.chantGain = gain;
+      if (this.chantTimer) clearTimeout(this.chantTimer);
+      this.chantTimer = setTimeout(() => this.stopChant(), 18000);
+    } catch {
+      // Chant is a garnish.
+    }
+  }
+
+  /** Near-miss groan: the recorded "oooh" swell plays once (~12 s),
+   *  riding on top of the procedural gasp. Cached buffer — repeat
+   *  near misses replay instantly. If decode fails, the gasp alone
+   *  still carries the moment. */
+  private async playGroanSwell(): Promise<void> {
+    if (!this.ctx || !this.outGain) return;
+    this.groanBuffer = await this.ensureGroanBuffer();
+    if (!this.groanBuffer || !this.ctx || !this.outGain) return;
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.groanBuffer;
+      src.loop = false;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain);
+      gain.connect(this.outGain);
+      const t = this.ctx.currentTime;
+      gain.gain.setTargetAtTime(0.9, t, 0.2);
+      src.start(t);
+      src.stop(t + this.groanBuffer.duration + 0.5);
+    } catch {
+      // Groan is a garnish — the procedural gasp already fired.
+    }
+  }
+
+  private stopChant(): void {
+    if (this.chantTimer) { clearTimeout(this.chantTimer); this.chantTimer = null; }
+    const src = this.chantSrc;
+    const gain = this.chantGain;
+    this.chantSrc = null;
+    this.chantGain = null;
+    if (!src || !gain || !this.ctx) return;
+    try {
+      gain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.8);
+      src.stop(this.ctx.currentTime + 3);
+    } catch {
+      // Already stopped.
+    }
   }
 
   private applyExcitement(level: number, tau: number): void {
@@ -111,6 +303,9 @@ export class CrowdAudio {
       this.outGain.gain.setTargetAtTime(1.25, t, 0.05);
       this.outGain.gain.setTargetAtTime(0.9, t + 1.4, 1.6);
     }
+    // Recorded layers ride on top of the procedural eruption.
+    void this.playCheerSwell();
+    void this.playChantBurst();
     setTimeout(() => this.applyExcitement(this.excitement, 1.2), 1600);
   }
 
@@ -118,6 +313,8 @@ export class CrowdAudio {
    * whose pitch sags as the crowd exhales. */
   gasp(): void {
     if (!this.roarFilter || !this.roarGain) return;
+    // Recorded groan swell rides on top of the procedural gasp.
+    void this.playGroanSwell();
     const t = this.roarGain.context.currentTime;
     this.roarFilter.frequency.cancelScheduledValues(t);
     this.roarFilter.frequency.setValueAtTime(1500, t);
@@ -135,7 +332,12 @@ export class CrowdAudio {
     } catch {
       // already stopped
     }
+    this.stopChant();
+    try { this.recordedBed?.stop(); } catch { /* already stopped */ }
     this.source = null;
+    this.recordedBed = null;
+    this.ctx = null;
+    this.bus = null;
     this.started = false;
   }
 }

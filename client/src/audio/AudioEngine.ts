@@ -185,6 +185,8 @@ class StadiumAudioDirector {
         this.whistle('FOUL');
         if (p.card !== 'NONE') {
           this.commentary.onCard({ playerName: name(p.foulerId), card: p.card });
+        } else {
+          this.commentary.onFoul({ playerName: name(p.foulerId) });
         }
       }),
       matchEventBus.on('MATCH_KICKOFF', (p) => {

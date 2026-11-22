@@ -1,5 +1,5 @@
 // Striker FC — modes/InternationalCupMode.ts (Epic P1-4)
-// The International Cup: take one of the 32 nations through a World-Cup
+// The International Cup: take one of the 33 nations through a World-Cup
 // road — a 4-team group (top two advance), then R16 → QF → SF → Final.
 // Your matches are real matches in the stadium (your nation's XI vs the
 // drawn opponent's XI); the group's other fixture each round is simulated

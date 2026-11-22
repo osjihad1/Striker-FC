@@ -45,7 +45,7 @@ export const NATION_CAPTAINS: Record<string, string> = {
   MA: 'rw_hakimi', HR: 'rw_modric', UY: 'rw_valverde', BD: 'rw_jamal',
   PL: 'rw_lewandowski', SN: 'rw_koulibaly', CH: 'rw_xhaka', DK: 'rw_hojbjerg',
   TR: 'rw_calhanoglu', CO: 'rw_jrodriguez', NG: 'rw_ndidi', GH: 'rw_jayew',
-  CM: 'rw_aboubakar', SA: 'rw_aldawsari', AU: 'rw_mryan', CA: 'rw_davies',
+  CM: 'rw_aboubakar', SA: 'rw_aldawsari', AU: 'rw_mryan', CA: 'rw_davies', GE: 'rw_kashia',
 };
 
 function fitScore(p: PlayerTemplate, role: Position): number {
@@ -192,11 +192,12 @@ const MUST_START: Record<string, string[]> = {
   AR: ['rw_messi'],
   PT: ['rw_ronaldo'],
   FR: ['rw_mbappe'],
+  GE: ['rw_kvaratskhelia'],
 };
 
 export function runNationsLab(): NationsLabResult {
   const teams = getNationalTeams();
-  const countOk = teams.length === 32;
+  const countOk = teams.length === 33;
   let xiShapeOk = teams.length > 0;
   let captainsOk = true;
   let numbersOk = true;

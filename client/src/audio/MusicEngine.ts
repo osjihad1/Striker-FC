@@ -1,11 +1,15 @@
-// Striker FC — audio/MusicEngine.ts (Epic P1-2)
-// Procedural music: no audio files, everything is synthesized WebAudio.
-// The lobby loop is a 96 BPM A-minor progression (Am–F–C–G), 8 bars =
-// exactly 20.000 s, scheduled with a lookahead timer so the loop is
-// seamless. A soft pad + plucked bass + a simple lead arpeggio; the whole
-// bus ducks to near-silence while a match is on screen (setScene).
+// Striker FC — audio/MusicEngine.ts (Epic P1-2, overnight asset build)
+// Menu music: REAL recorded tracks now (client/src/assets/audio/music/ —
+// six synthesized football-anthem tracks, ~2 min each, played in rotation
+// through an HTMLAudioElement so they survive mobile throttling and need no
+// Web Audio unlock). The old procedural 96 BPM A-minor loop is kept as a
+// fallback: if a track file fails to load, the engine falls back to the
+// procedural scheduler instead of going silent. The lobby loop ducks to a
+// whisper while a match is on screen (setScene). All volume follows
+// settingsStore (musicEnabled / musicVolume / masterVolume / muted).
 
 import { settingsStore } from '../store/useSettingsStore';
+import { MENU_TRACKS } from './RecordedAudio';
 
 const BPM = 96;
 const BAR_SEC = (60 / BPM) * 4; // 2.5 s
@@ -32,21 +36,106 @@ class MusicEngine {
   private barIndex = 0;
   private scene: 'MENU' | 'MATCH' = 'MENU';
   private started = false;
+  // Recorded-track playback.
+  private trackEl: HTMLAudioElement | null = null;
+  private trackIndex = 0;
+  private useRecorded: boolean | null = null; // null = not yet decided
+  private settingsOff: (() => void) | null = null;
 
-  /** Start (or resume) the music bus. Safe to call on every render. */
+  /** Start (or resume) the music. Safe to call on every render. */
   start(): void {
-    if (this.started) { void this.ctx?.resume().catch(() => undefined); return; }
-    const AC = typeof window !== 'undefined' ? window.AudioContext : undefined;
-    if (!AC) return;
-    try {
-      this.ctx = new AC();
-    } catch {
+    if (this.started) {
+      void this.ctx?.resume().catch(() => undefined);
+      if (this.trackEl && this.trackEl.paused && this.useRecorded) {
+        void this.trackEl.play().catch(() => undefined);
+      }
       return;
     }
-    this.bus = this.ctx.createGain();
-    this.bus.gain.value = this.targetGain();
-    this.bus.connect(this.ctx.destination);
     this.started = true;
+    if (!this.settingsOff) {
+      this.settingsOff = settingsStore.subscribe(() => this.syncTrackVolume());
+    }
+    if (this.useRecorded === false) {
+      this.startProcedural();
+      return;
+    }
+    this.startRecorded();
+  }
+
+  /** Recorded playlist: one <audio> element, tracks in rotation. */
+  private startRecorded(): void {
+    if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+      this.startProcedural();
+      return;
+    }
+    this.useRecorded = true;
+    if (!this.trackEl) {
+      const el = new Audio();
+      el.preload = 'auto';
+      el.loop = false;
+      // Random start track so the lobby doesn't always open on the same song.
+      this.trackIndex = Math.floor(Math.random() * MENU_TRACKS.length);
+      el.addEventListener('ended', () => this.advanceTrack());
+      el.addEventListener('error', () => {
+        // A track file that won't play → fall back to procedural music.
+        if (this.useRecorded) {
+          this.useRecorded = false;
+          try { el.pause(); } catch { /* already stopped */ }
+          this.trackEl = null;
+          if (this.started) this.startProcedural();
+        }
+      });
+      this.trackEl = el;
+    }
+    this.loadCurrentTrack();
+    this.syncTrackVolume();
+    void this.trackEl.play().catch(() => {
+      // Autoplay policy: the App calls start() from the first gesture, so a
+      // rejection here just means "not unlocked yet" — the next start() call
+      // (on the next gesture) resumes it.
+    });
+  }
+
+  private loadCurrentTrack(): void {
+    if (!this.trackEl) return;
+    this.trackEl.src = MENU_TRACKS[this.trackIndex]!.url;
+    this.trackEl.currentTime = 0;
+  }
+
+  private advanceTrack(): void {
+    if (!this.trackEl || !this.started || !this.useRecorded) return;
+    this.trackIndex = (this.trackIndex + 1) % MENU_TRACKS.length;
+    this.loadCurrentTrack();
+    void this.trackEl.play().catch(() => undefined);
+  }
+
+  /** Current recorded track, for the Settings / lobby "now playing" line. */
+  get currentTrack(): { title: string; bpm: number } | null {
+    if (!this.useRecorded) return null;
+    const t = MENU_TRACKS[this.trackIndex];
+    return t ? { title: t.title, bpm: t.bpm } : null;
+  }
+
+  /** Skip to the next menu track (used by the lobby track control). */
+  nextTrack(): void {
+    if (this.useRecorded) this.advanceTrack();
+  }
+
+  private startProcedural(): void {
+    // A sting may already have created the context — reuse it, don't leak one.
+    if (!this.ctx) {
+      const AC = typeof window !== 'undefined' ? window.AudioContext : undefined;
+      if (!AC) return;
+      try {
+        this.ctx = new AC();
+      } catch {
+        return;
+      }
+      this.bus = this.ctx.createGain();
+      this.bus.connect(this.ctx.destination);
+    }
+    if (!this.bus) return;
+    this.bus.gain.value = this.targetGain();
     this.nextBarAt = this.ctx.currentTime + 0.1;
     this.barIndex = 0;
     // Lookahead scheduler: keep ~2 bars queued at all times.
@@ -55,6 +144,10 @@ class MusicEngine {
   }
 
   stop(): void {
+    if (this.trackEl) {
+      try { this.trackEl.pause(); } catch { /* already stopped */ }
+      this.trackEl = null;
+    }
     if (this.timer !== null) { window.clearInterval(this.timer); this.timer = null; }
     if (this.ctx) { void this.ctx.close().catch(() => undefined); this.ctx = null; }
     this.bus = null;
@@ -67,6 +160,7 @@ class MusicEngine {
     if (this.bus && this.ctx) {
       this.bus.gain.setTargetAtTime(this.targetGain(), this.ctx.currentTime, 0.4);
     }
+    this.syncTrackVolume();
   }
 
   private targetGain(): number {
@@ -74,6 +168,12 @@ class MusicEngine {
     if (!s.musicEnabled || s.muted) return 0;
     const base = s.musicVolume * s.masterVolume * 0.5;
     return this.scene === 'MATCH' ? base * 0.06 : base; // ≈ −18 dB duck in matches (plus master trim)
+  }
+
+  private syncTrackVolume(): void {
+    if (this.trackEl) {
+      this.trackEl.volume = Math.min(1, Math.max(0, this.targetGain()));
+    }
   }
 
   private schedule(): void {
@@ -126,7 +226,18 @@ class MusicEngine {
   sting(kind: 'WIN' | 'LOSE' | 'PACK'): void {
     const AC = typeof window !== 'undefined' ? window.AudioContext : undefined;
     if (!AC) return;
-    if (!this.ctx) this.start();
+    // Sting gets its own lightweight context — it must NOT start the menu
+    // music engine (it fires from matches and pack screens).
+    if (!this.ctx) {
+      try {
+        this.ctx = new AC();
+        this.bus = this.ctx.createGain();
+        this.bus.gain.value = this.targetGain();
+        this.bus.connect(this.ctx.destination);
+      } catch {
+        return;
+      }
+    }
     if (!this.ctx || !this.bus) return;
     const now = this.ctx.currentTime + 0.02;
     const notes = kind === 'LOSE'

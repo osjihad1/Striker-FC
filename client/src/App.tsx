@@ -48,6 +48,7 @@ import type { ShotType, SkillMoveId } from "./core/types";
 import { commitProfile, metaStore, useMetaStore } from "./store/useMetaStore";
 import { ErrorBoundary } from "./ui/components/ErrorBoundary";
 import { SplashScreen, LoadingScreen, LoginScreen } from "./ui/screens/BootFlowScreens";
+import { GoalCelebrationVideo, IntroVideoScreen } from "./ui/VideoClips";
 import { EventsScreen } from "./ui/screens/EventsScreen";
 import { NationalTeamsScreen } from "./ui/screens/NationalTeamsScreen";
 import { ClubsScreen } from "./ui/screens/ClubsScreen";
@@ -106,7 +107,8 @@ import { applyModeRewards, NO_FACTS, type SessionFacts } from "./modes/ModeRewar
 import { PlayModesScreen } from "./ui/screens/PlayModesScreen";
 import { PreMatchScreen, type PreMatchData, type PreMatchSide } from "./ui/screens/PreMatchScreen";
 import type { KitColors } from "./rendering/PlayerRig";
-import { AthletePortrait } from "./ui/components/PlayerCard";
+import { AthletePortrait, PhotoPortrait } from "./ui/components/PlayerCard";
+import { facePhotoUrlFor } from "./data/PlayerFaces";
 import { MatchEndScreen, type MatchEndData } from "./ui/screens/MatchEndScreen";
 import { ManagerTouchlineHUD } from "./ui/hud/ManagerTouchlineHUD";
 // Phase 09 — Store, cinematic pack walkouts, Transfer Market, Quests & Pass.
@@ -498,10 +500,11 @@ export function App() {
   // They are diagnostics, so they now run only when the Engine Data tab is
   // opened (the nav arms them); the menu and the game never pay for them.
   const [labsArmed, setLabsArmed] = useState(false);
-  // Boot flow: Splash (brand + creator credit) → Loading (progress gated on
-  // the real profile load) → Login as Guest → Lobby. The game shell renders
-  // only after the guest tap, like a native football game.
-  const [flowStage, setFlowStage] = useState<"splash" | "loading" | "login" | "game">("splash");
+  // Boot flow: Intro video (skippable, falls back to Splash on failure or
+  // reduced motion) → Splash (brand + creator credit) → Loading (progress
+  // gated on the real profile load) → Login as Guest → Lobby. The game
+  // shell renders only after the guest tap, like a native football game.
+  const [flowStage, setFlowStage] = useState<"intro" | "splash" | "loading" | "login" | "game">("intro");
   // Remount key for the 3D stadium: bumped by the stadium error boundary's
   // retry so a dead WebGL renderer is rebuilt from scratch.
   const [stadiumMountKey, setStadiumMountKey] = useState(0);
@@ -529,9 +532,13 @@ export function App() {
 
   // P1-2: procedural music — starts on the first touch (autoplay rules),
   // plays in the menus and ducks to a whisper while a match is on screen.
+  // Audio-fix (2026-11-22): NOT { once: true } — start() is idempotent
+  // (it resumes/re-plays when already started), so every gesture retries
+  // it until playback is actually confirmed instead of a single rejected
+  // first play() leaving music silent for the whole session.
   useEffect(() => {
     const kick = () => musicEngine.start();
-    window.addEventListener("pointerdown", kick, { once: true });
+    window.addEventListener("pointerdown", kick);
     return () => window.removeEventListener("pointerdown", kick);
   }, []);
   useEffect(() => {
@@ -2561,7 +2568,7 @@ export function App() {
     { ok: dailyLab.ok && dailyLab.cycleOk, label: "Daily Rewards lab — 30-day calendar pays exactly, Day 8 never wraps, milestone packs land", detail: dailyLab.detail },
     { ok: clubsLab.countsOk && clubsLab.squadsOk, label: "Clubs lab — 41 clubs load, every squad 16+ strong", detail: clubsLab.detail },
     { ok: clubsLab.xiOk && clubsLab.starsOk && clubsLab.realDepthOk, label: "Clubs lab — every club fields a valid XI of its own; stars at their real clubs; thin clubs carry 11+ real players", detail: "Mbappé/Bellingham/Vinícius → Real Madrid · Haaland → Man City · Salah → Liverpool · Kane → Bayern · Messi → Inter Miami · Ronaldo → Al Nassr" },
-    { ok: nationsLab.countOk && nationsLab.xiShapeOk && nationsLab.starsStartOk && nationsLab.captainsOk && nationsLab.numbersOk && nationsLab.bangladeshOk, label: "Nations lab — 32 nations, real stars start, real captains, unique real shirt numbers", detail: nationsLab.detail },
+    { ok: nationsLab.countOk && nationsLab.xiShapeOk && nationsLab.starsStartOk && nationsLab.captainsOk && nationsLab.numbersOk && nationsLab.bangladeshOk, label: "Nations lab — 33 nations, real stars start, real captains, unique real shirt numbers", detail: nationsLab.detail },
     { ok: autoSwitchLab.defenceOk && autoSwitchLab.passOk, label: "Auto-switch lab — control follows the ball in defence, lands on the receiver in attack", detail: autoSwitchLab.detail },
     { ok: autoSwitchLab.manualOk && autoSwitchLab.userPassOk, label: "Auto-switch lab — MANUAL never drifts, but your own pass always hands control to its receiver", detail: "ground / through / lob / cross receptions all switch at the first touch, in every switch mode" },
     { ok: matchUpLab.switchFlashOk, label: "Switch flash lab — PLAYER_SWITCHED fires on the handover and the ring pulse is live", detail: matchUpLab.detail },
@@ -2618,6 +2625,7 @@ export function App() {
   if (flowStage !== "game") {
     return (
       <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--bg)]">
+        {flowStage === "intro" && <IntroVideoScreen onDone={() => setFlowStage("splash")} />}
         {flowStage === "splash" && <SplashScreen onDone={() => setFlowStage("loading")} />}
         {flowStage === "loading" && <LoadingScreen ready={profileLoaded} onDone={() => setFlowStage("login")} />}
         {flowStage === "login" && (
@@ -2805,6 +2813,7 @@ export function App() {
           role="status"
           aria-label={`Goal celebration — ${goalBeat.scorer}, ${goalBeat.minute} minutes`}
         >
+          <GoalCelebrationVideo />
           <div aria-hidden className="absolute inset-0 bg-black/35" />
           {Array.from({ length: 16 }, (_, i) => (
             <span
@@ -2824,12 +2833,28 @@ export function App() {
             </p>
             {goalBeat.template && (
               <div className="mt-3 h-24 w-24 overflow-hidden rounded-full ring-4 ring-[var(--gold)]">
-                <AthletePortrait
-                  appearance={goalBeat.template.appearance}
-                  primary={goalBeat.kit.primary}
-                  secondary={goalBeat.kit.secondary}
-                  label={`${goalBeat.scorer} portrait`}
-                />
+                {(() => {
+                  const photo = facePhotoUrlFor(goalBeat.template!.id);
+                  if (photo) {
+                    return (
+                      <PhotoPortrait
+                        photo={photo}
+                        name={goalBeat.scorer}
+                        appearance={goalBeat.template!.appearance}
+                        primary={goalBeat.kit.primary}
+                        secondary={goalBeat.kit.secondary}
+                      />
+                    );
+                  }
+                  return (
+                    <AthletePortrait
+                      appearance={goalBeat.template!.appearance}
+                      primary={goalBeat.kit.primary}
+                      secondary={goalBeat.kit.secondary}
+                      label={`${goalBeat.scorer} portrait`}
+                    />
+                  );
+                })()}
               </div>
             )}
             <p className="font-display mt-2 text-[26px] font-bold uppercase leading-tight text-[var(--gold)]">
@@ -4339,7 +4364,7 @@ function PlayersTab({ players, focusId }: { players: PlayerTemplate[]; focusId?:
       <SectionTitle>{t('hub.playerDatabase')}</SectionTitle>
       <p className="mt-1 text-sm text-[var(--dim)]">
         <span className="tnum font-semibold text-[var(--text)]">{filtered.length}</span> of {players.length} players match.
-        Every player in the game — the real stars of 32 national teams and 41 clubs, plus the original Striker FC roster.
+        Every player in the game — the real stars of 33 national teams and 41 clubs, plus the original Striker FC roster.
       </p>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

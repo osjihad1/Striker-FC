@@ -8,6 +8,8 @@ import type { QuestProgressRow } from '../../modes/ModeRewards';
 import type { MatchRatings } from '../../meta/PlayerRatings';
 import { DIVISIONS, STARS_TO_PROMOTE } from '../../modes/HeadToHeadMode';
 import { currentLanguage, formatNumber, t } from '../../i18n/i18n';
+import championsHeroUrl from '../../assets/art/champions-hero.jpg';
+import trophyLeagueUrl from '../../assets/art/trophy-league.jpg';
 
 /** Cycle-2: stats-sheet labels arrive as English data strings; map the
     known ones through the i18n table and localize digits in বাংলা mode. */
@@ -101,6 +103,11 @@ function TrophyCelebration() {
   }));
   return (
     <div className="relative overflow-hidden rounded-2xl border border-[var(--gold)]/60 bg-[#241a05] px-4 py-5 text-center" aria-label={t('end.champions')}>
+      {/* Trophy & menu art: champions photo behind the celebration; the
+          gold gradient + SVG trophy below stay as the fallback if the
+          photo fails to load (onError hides the <img>). */}
+      <img src={championsHeroUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[50%_30%]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      <div aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(20,12,2,0.55) 0%, rgba(20,12,2,0.25) 45%, rgba(20,12,2,0.82) 100%)' }} />
       <div aria-hidden className="pointer-events-none absolute inset-0">
         {pieces.map((p, i) => (
           <span
@@ -113,9 +120,12 @@ function TrophyCelebration() {
           />
         ))}
       </div>
-      <svg className="trophy-pulse relative mx-auto" width="72" height="72" viewBox="0 0 24 24" role="img" aria-label={t('end.champions')}>
-        <path d="M6 3h12v2h3v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.92V18h3v3H8v-3h3v-2.08A6 6 0 0 1 8.42 13H8a5 5 0 0 1-5-5V5h3V3zm-1 4v1a3 3 0 0 0 3 3V7H5zm14 0h-3v4a3 3 0 0 0 3-3V7z" fill="#f5c542" stroke="#b45309" strokeWidth="0.6" />
-      </svg>
+      <span className="trophy-pulse relative mx-auto block h-[112px] w-[112px]">
+        <svg className="absolute inset-0 m-auto" width="72" height="72" viewBox="0 0 24 24" role="img" aria-label={t('end.champions')}>
+          <path d="M6 3h12v2h3v3a5 5 0 0 1-5 5h-.42A6 6 0 0 1 13 15.92V18h3v3H8v-3h3v-2.08A6 6 0 0 1 8.42 13H8a5 5 0 0 1-5-5V5h3V3zm-1 4v1a3 3 0 0 0 3 3V7H5zm14 0h-3v4a3 3 0 0 0 3-3V7z" fill="#f5c542" stroke="#b45309" strokeWidth="0.6" />
+        </svg>
+        <img src={trophyLeagueUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full rounded-xl object-cover shadow-2xl ring-1 ring-[var(--gold)]/70" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      </span>
       <p className="font-display relative mt-2 text-3xl font-bold uppercase tracking-widest text-[var(--gold)]">{t('end.champions')}</p>
       <p className="relative mt-1 text-sm text-amber-100/85">{t('end.championsSub')}</p>
     </div>

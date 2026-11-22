@@ -84,7 +84,7 @@ export const REAL_CLUB_BY_PLAYER: Record<string, string> = {
   // FC Barcelona
   rw_kounde: 'fc_barcelona', rw_raphinha: 'fc_barcelona', rw_cubarsi: 'fc_barcelona',
   rw_pedri: 'fc_barcelona', rw_yamal: 'fc_barcelona', rw_olmo: 'fc_barcelona',
-  rw_terstegen: 'fc_barcelona', rw_fdjong: 'fc_barcelona',
+  rw_terstegen: 'fc_barcelona', rw_fdjong: 'fc_barcelona', rw_rashford: 'fc_barcelona', // Rashford on loan from Man Utd, 2025-26
   // Manchester City
   rw_rdias: 'man_city', rw_bsilva: 'man_city', rw_stones: 'man_city', rw_foden: 'man_city',
   rw_rodri: 'man_city', rw_donnarumma: 'man_city', rw_ake: 'man_city', rw_reijnders: 'man_city',
@@ -111,6 +111,7 @@ export const REAL_CLUB_BY_PLAYER: Record<string, string> = {
   // Paris Saint-Germain
   rw_nmendes: 'psg', rw_vitinha: 'psg', rw_dembele: 'psg', rw_barcola: 'psg',
   rw_marquinhos: 'psg', rw_fabian: 'psg', rw_hakimi: 'psg', rw_leekangin: 'psg',
+  rw_kvaratskhelia: 'psg',
   // Arsenal
   rw_saliba: 'arsenal', rw_gabriel: 'arsenal', rw_rice: 'arsenal', rw_saka: 'arsenal',
   rw_merino: 'arsenal', rw_havertz: 'arsenal', rw_calafiori: 'arsenal',
@@ -286,6 +287,8 @@ export const NATIONS: NationDef[] = [
       ['rw_olise', 'Michael Olise', 'Olise', 'RW', 84, 'L', 4, 'TECHNICAL_DRIBBLER', '#8d5524', 'CURLY', '#111111', 184, 'LEAN', 15, 'munich_stern'],
       ['rw_konate', 'Ibrahima Konaté', 'Konaté', 'CB', 84, 'R', 2, null, '#5c3317', 'SHORT', '#111111', 194, 'STOCKY', 24, 'mersey_reds'],
       ['rw_zidane', 'Zinedine Zidane', 'Zidane', 'CAM', 96, 'R', 4, 'INCISIVE_PASS_PLUS', '#f1c27d', 'BALD', '#111111', 185, 'ATHLETIC', 10, 'mad_royals', { pac: 82, sho: 90, pas: 96, dri: 95 }],
+      // Faces follow-up (2026-11-22): Griezmann had a photo but no DB entry.
+      ['rw_griezmann', 'Antoine Griezmann', 'Griezmann', 'CAM', 88, 'R', 4, 'FINESSE_SHOT_PLUS', '#e5b887', 'SHORT', '#1c1917', 176, 'LEAN', 7, 'mad_royals', { sho: 90, pas: 89, dri: 88 }],
     ],
   },
   {
@@ -326,6 +329,9 @@ export const NATIONS: NationDef[] = [
       ['rw_gordon', 'Anthony Gordon', 'Gordon', 'LW', 82, 'R', 4, 'RAPID_PLUS', '#f1c27d', 'LONG', '#8a5a2b', 183, 'LEAN', 18, 'man_sky'],
       ['rw_watkins', 'Ollie Watkins', 'Watkins', 'ST', 84, 'R', 3, null, '#e5b887', 'SHORT', '#292524', 180, 'ATHLETIC', 19, 'london_cannons'],
       ['rw_mainoo', 'Kobbie Mainoo', 'Mainoo', 'CM', 80, 'R', 3, null, '#5c3317', 'CURLY', '#111111', 175, 'ATHLETIC', 26, 'man_sky'],
+      // Faces follow-up (2026-11-22): Rashford had a photo but no DB entry.
+      // On loan at Barcelona from Man Utd for 2025-26 (shirt 14).
+      ['rw_rashford', 'Marcus Rashford', 'Rashford', 'LW', 84, 'R', 4, 'RAPID_PLUS', '#8d5524', 'FADE', '#111111', 185, 'ATHLETIC', 14, 'cat_blau', { pac: 91, sho: 84, dri: 86 }],
     ],
   },
   {
@@ -364,6 +370,11 @@ export const NATIONS: NationDef[] = [
       ['rw_fullkrug', 'Niclas Füllkrug', 'Füllkrug', 'ST', 81, 'R', 2, 'POWER_SHOT_PLUS', '#f1c27d', 'SHORT', '#3b2f2f', 188, 'STOCKY', 9, 'london_cannons'],
       ['rw_gnabry', 'Serge Gnabry', 'Gnabry', 'RW', 82, 'R', 4, null, '#6b3e26', 'FADE', '#111111', 176, 'ATHLETIC', 20, 'munich_stern'],
       ['rw_schlotterbeck', 'Nico Schlotterbeck', 'Schlotterbeck', 'CB', 83, 'L', 2, null, '#f1c27d', 'SHORT', '#8a5a2b', 191, 'ATHLETIC', 15, 'munich_stern'],
+      // Faces follow-up (2026-11-22): Kroos had a photo but no DB entry.
+      // Retired July 2024 after Euro 2024 (last club Real Madrid) — kept as
+      // a playable star at the owner's request; no 2025-26 real-club mapping,
+      // like De Bruyne's Napoli tag in the mapping comment above.
+      ['rw_kroos', 'Toni Kroos', 'Kroos', 'CM', 88, 'R', 3, 'INCISIVE_PASS_PLUS', '#f1c27d', 'SHORT', '#8a5a2b', 183, 'ATHLETIC', 8, 'mad_royals', { pas: 94, sho: 85, dri: 86 }],
     ],
   },
   {
@@ -795,6 +806,28 @@ export const NATIONS: NationDef[] = [
       ['rw_shaffelburg', 'Jacob Shaffelburg', 'Shaffelburg', 'LW', 76, 'L', 3, 'RAPID_PLUS', '#f1c27d', 'CURLY', '#8a5a2b', 178, 'LEAN', 14, 'paris_etoile'],
       ['rw_jdavid', 'Jonathan David', 'David', 'ST', 85, 'R', 4, 'FINESSE_SHOT_PLUS', '#5c3317', 'FADE', '#111111', 180, 'LEAN', 20, 'london_cannons', { sho: 87, pac: 88 }],
       ['rw_larin', 'Cyle Larin', 'Larin', 'ST', 79, 'R', 2, 'POWER_SHOT_PLUS', '#5c3317', 'FADE', '#111111', 188, 'STOCKY', 9, 'paris_etoile'],
+    ],
+  },
+  {
+    // Georgia (added 2026-11-22, faces follow-up): Kvaratskhelia had a photo
+    // but no DB entry and no nation existed for him, so Georgia joins as the
+    // 33rd nation with a full real XI — Kvaratskhelia the star (PSG,
+    // 2025-26), Mamardashvili the keeper, Kashia the captain. A one-man
+    // nation would break the nations lab XI (11 slots), so all 11 starters
+    // are real. Lab count + "32 nations" strings updated with it.
+    code: 'GE', name: 'Georgia', abbr: 'GEO', primary: '#f8fafc', secondary: '#dc2626',
+    players: [
+      ['rw_mamardashvili', 'Giorgi Mamardashvili', 'Mamardashvili', 'GK', 84, 'R', 2, 'BRICK_WALL_GK', '#e5b887', 'SHORT', '#1c1917', 197, 'ATHLETIC', 25, 'paris_etoile'],
+      ['rw_kakabadze', 'Otar Kakabadze', 'Kakabadze', 'RB', 75, 'R', 3, null, '#e5b887', 'SHORT', '#111111', 186, 'ATHLETIC', 2, 'paris_etoile'],
+      ['rw_kashia', 'Guram Kashia', 'Kashia', 'CB', 76, 'R', 2, null, '#e5b887', 'SHORT', '#111111', 185, 'STOCKY', 5, 'paris_etoile'],
+      ['rw_dvali', 'Lasha Dvali', 'Dvali', 'CB', 75, 'L', 2, null, '#e5b887', 'SHORT', '#111111', 190, 'ATHLETIC', 4, 'paris_etoile'],
+      ['rw_lochoshvili', 'Luka Lochoshvili', 'Lochoshvili', 'LB', 74, 'L', 2, null, '#e5b887', 'SHORT', '#111111', 191, 'ATHLETIC', 21, 'paris_etoile'],
+      ['rw_kiteishvili', 'Otar Kiteishvili', 'Kiteishvili', 'CM', 77, 'R', 3, null, '#e5b887', 'SHORT', '#111111', 173, 'LEAN', 6, 'paris_etoile'],
+      ['rw_kochorashvili', 'Giorgi Kochorashvili', 'Kochorashvili', 'CM', 76, 'R', 3, null, '#e5b887', 'SHORT', '#111111', 184, 'ATHLETIC', 20, 'paris_etoile'],
+      ['rw_chakvetadze', 'Giorgi Chakvetadze', 'Chakvetadze', 'CAM', 77, 'R', 4, 'TECHNICAL_DRIBBLER', '#e5b887', 'CURLY', '#111111', 180, 'LEAN', 10, 'paris_etoile'],
+      ['rw_kvaratskhelia', 'Khvicha Kvaratskhelia', 'Kvaratskhelia', 'LW', 86, 'R', 5, 'RAPID_PLUS', '#e5b887', 'CURLY', '#111111', 183, 'ATHLETIC', 7, 'paris_etoile', { pac: 91, dri: 90, sho: 84 }],
+      ['rw_mikautadze', 'Georges Mikautadze', 'Mikautadze', 'ST', 79, 'R', 3, 'FINESSE_SHOT_PLUS', '#e5b887', 'SHORT', '#111111', 177, 'ATHLETIC', 22, 'paris_etoile'],
+      ['rw_zivzivadze', 'Budu Zivzivadze', 'Zivzivadze', 'ST', 76, 'R', 3, 'POWER_SHOT_PLUS', '#e5b887', 'SHORT', '#111111', 189, 'STOCKY', 9, 'paris_etoile'],
     ],
   },
 ];

@@ -16,6 +16,8 @@ import {
 import { getClubTeam } from '../../data/Clubs';
 import { mulberry32 } from '../../core/math';
 import { currentLanguage, formatNumber, t } from '../../i18n/i18n';
+import trophyLeagueUrl from '../../assets/art/trophy-league.jpg';
+import trophyCupUrl from '../../assets/art/trophy-cup.jpg';
 
 export type ClassicMode = 'MATCH' | 'SCRIMMAGE' | 'PRACTICE';
 
@@ -157,6 +159,12 @@ function CareerCard({ profile, onLaunchCareer, onCommit }: {
           <p className="tnum mt-2 text-[12px] font-semibold text-[var(--dim)]">
             {t('modes.seasonN', { n: career.season })} · {userPos > 0 ? t('modes.placeLine', { pos: currentLanguage() === 'bn' ? formatNumber(userPos) : `${userPos}${userPos === 1 ? 'st' : userPos === 2 ? 'nd' : userPos === 3 ? 'rd' : 'th'}` }) : '—'} · {t('modes.titlesWon', { n: career.titlesWon })}
           </p>
+          {career.titlesWon > 0 && (
+            <div className="mt-2 flex items-center gap-3 rounded-xl border border-[var(--gold)]/40 bg-black/30 p-2">
+              <img src={trophyLeagueUrl} alt="" aria-hidden className="h-16 w-auto shrink-0 rounded-lg object-cover shadow-lg ring-1 ring-[var(--gold)]/50" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <p className="tnum text-[13px] font-bold text-[var(--gold)]">{t('modes.titlesWon', { n: career.titlesWon })}</p>
+            </div>
+          )}
           <ol className="mt-2 space-y-0.5" aria-label={t('modes.career')}>
             {table.slice(0, 5).map((row, i) => (
               <li key={row.clubId} className={`flex items-center justify-between rounded px-2 py-1 text-[12px] ${row.clubId === CAREER_USER_ID ? 'bg-amber-400/15 font-bold' : 'text-[var(--dim)]'}`}>
@@ -407,10 +415,13 @@ export function PlayModesScreen({
               )}
             </div>
             {championId && (
-              <p className="mt-3 text-sm font-semibold">
-                {t('modes.championsLine', { name: cupClubById(championId, profile).name }).replace(': ' + cupClubById(championId, profile).name, '')}: <span className="text-[var(--gold)]">{cupClubById(championId, profile).name}</span>
-                {championId === USER_CLUB_ID ? t('modes.championsYou') : ''}
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <img src={trophyCupUrl} alt="" aria-hidden className="h-24 w-auto rounded-xl object-cover shadow-xl ring-1 ring-[var(--gold)]/60" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                <p className="min-w-0 flex-1 text-sm font-semibold">
+                  {t('modes.championsLine', { name: cupClubById(championId, profile).name }).replace(': ' + cupClubById(championId, profile).name, '')}: <span className="text-[var(--gold)]">{cupClubById(championId, profile).name}</span>
+                  {championId === USER_CLUB_ID ? t('modes.championsYou') : ''}
+                </p>
+              </div>
             )}
             <div className="mt-3 flex flex-wrap gap-2">
               {userTie && (

@@ -31,6 +31,7 @@ import { ClubCrestArt } from '../components/ClubCrestArt';
 import { getFormationById } from '../../data/Formations';
 import { PlayerShowcase } from '../../rendering/PlayerShowcase';
 import heroStarUrl from '../../assets/hero-star.jpg';
+import championsHeroUrl from '../../assets/art/champions-hero.jpg';
 import packGoldUrl from '../../assets/pack-gold.jpg';
 
 function ClubCrest({ profile, size = 46 }: { profile: SaveProfile; size?: number }) {
@@ -495,6 +496,28 @@ export function MainHubScreen(props: MainHubProps) {
           </div>
         </div>
       </div>
+
+      {/* ── Champions banner (trophy art): the trophy-lift photo opens the
+          International Cup on the Nations screen. The dark gradient stays
+          as the fallback if the photo fails to load. ── */}
+      <button
+        type="button"
+        onClick={onNations}
+        className="relative mt-3 block w-full overflow-hidden rounded-3xl border border-[var(--gold)]/50 text-left shadow-2xl"
+        aria-label={`${t('nations.cupTitle')} — ${t('nations.glory')}`}
+      >
+        <img src={championsHeroUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[50%_25%]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        <span aria-hidden className="absolute inset-0" style={{ background: 'linear-gradient(96deg, rgba(4,10,24,0.55) 0%, rgba(4,10,24,0.25) 55%, rgba(4,10,24,0.75) 100%), linear-gradient(0deg, rgba(4,10,24,0.85) 0%, transparent 55%)' }} />
+        <span className="relative block px-4 py-4">
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--gold)]">{t('nations.cupTitle')}</span>
+          <span className="font-display mt-1 block text-[26px] font-bold uppercase leading-[0.95] text-white" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
+            {t('nations.glory')}
+          </span>
+          <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-white">
+            {t('events.goNow')} →
+          </span>
+        </span>
+      </button>
 
       {/* ── Live status tiles: claim badges + countdowns, all real state ── */}
       <div className="mt-3 grid grid-cols-2 gap-2 min-[720px]:grid-cols-4" aria-label="Live status">

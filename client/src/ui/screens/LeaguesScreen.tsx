@@ -15,6 +15,8 @@ import { claimableSales } from '../../meta/MarketService';
 import { divisionName } from '../../modes/HeadToHeadMode';
 import { formatNumber, t } from '../../i18n/i18n';
 import { ClubCrestArt } from '../components/ClubCrestArt';
+import trophyWorldUrl from '../../assets/art/trophy-world.jpg';
+import trophyLeagueUrl from '../../assets/art/trophy-league.jpg';
 
 interface Notice {
   id: string;
@@ -116,6 +118,22 @@ export function LeaguesScreen({
           <p className="mt-4 text-[13px] leading-relaxed text-white/60">
             {profile.managerName}
           </p>
+          {/* Trophy cabinet: real silverware from the profile — the World
+              Cup when won, the league trophy per Career title. Until
+              anything is won the league trophy shows dimmed, as the prize
+              to chase; a failed photo hides and the text line remains. */}
+          <div className="mt-4 flex items-center gap-3 rounded-xl bg-black/30 p-2">
+            {profile.worldCup?.stage === 'WON' && (
+              <img src={trophyWorldUrl} alt="" aria-hidden className="h-16 w-auto shrink-0 rounded-lg object-cover shadow-lg ring-1 ring-[var(--gold)]/50" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            )}
+            <img src={trophyLeagueUrl} alt="" aria-hidden className={`h-16 w-auto shrink-0 rounded-lg object-cover shadow-lg ring-1 ring-[var(--gold)]/50 ${(profile.career?.titlesWon ?? 0) > 0 ? '' : 'opacity-40 grayscale'}`} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <div className="min-w-0">
+              <p className="font-display text-[15px] font-bold uppercase leading-tight tracking-wide text-[var(--gold)]">{t('end.champions')}</p>
+              <p className="tnum mt-0.5 text-[12px] font-semibold text-white/70">
+                {profile.worldCup?.stage === 'WON' ? t('nations.champions') : t('modes.titlesWon', { n: profile.career?.titlesWon ?? 0 })}
+              </p>
+            </div>
+          </div>
         </section>
 
         {/* Notice board */}

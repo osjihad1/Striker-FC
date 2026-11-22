@@ -19,7 +19,8 @@ import { buildPlayerRig, isSharedRigMaterial, type KitColors, type RigDetail } f
 import { PlayerAnimator, type AnimState } from './PlayerAnimator';
 import { settingsStore } from '../store/useSettingsStore';
 import { BallRenderer } from './BallRenderer';
-import { AthletePortrait } from '../ui/components/PlayerCard';
+import { AthletePortrait, PhotoPortrait } from '../ui/components/PlayerCard';
+import { facePhotoUrlFor } from '../data/PlayerFaces';
 
 /** The showcase cycle (spec §2.6.5): idle → jog → SHOOT → the player's
  *  own celebration. KICK stays in the cycle only for SIU celebrators. */
@@ -245,6 +246,8 @@ export function PlayerShowcase({
   }, [stageKey, failed]);
 
   if (failed) {
+    // Real photo first when we have one, else the painted portrait.
+    const photo = facePhotoUrlFor(template.id);
     return (
       <div
         className="flex w-full items-center justify-center"
@@ -252,14 +255,26 @@ export function PlayerShowcase({
         role="img"
         aria-label={label ?? `${template.name} 3D showcase unavailable on this device — portrait shown instead`}
       >
-        <div className="h-full max-w-[220px]">
-          <AthletePortrait
-            appearance={template.appearance}
-            primary={kit.primary}
-            secondary={kit.secondary}
-            label={`${template.name} portrait`}
-          />
-        </div>
+        {photo ? (
+          <div className="h-full max-w-[220px] overflow-hidden rounded-xl">
+            <PhotoPortrait
+              photo={photo}
+              name={template.name}
+              appearance={template.appearance}
+              primary={kit.primary}
+              secondary={kit.secondary}
+            />
+          </div>
+        ) : (
+          <div className="h-full max-w-[220px]">
+            <AthletePortrait
+              appearance={template.appearance}
+              primary={kit.primary}
+              secondary={kit.secondary}
+              label={`${template.name} portrait`}
+            />
+          </div>
+        )}
       </div>
     );
   }

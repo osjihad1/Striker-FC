@@ -8,10 +8,11 @@
 // richly shaded render from the player's FaceAppearance + club kit (the
 // same data that builds his 3D rig), so it works fully offline.
 
-import { useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import type { FaceAppearance, OwnedPlayerCard, PlayerTemplate } from '../../core/types';
 import { getCardEffectiveOvr } from '../../core/types';
 import { ALL_CLUBS } from '../../data/Clubs';
+import { facePhotoUrlFor } from '../../data/PlayerFaces';
 import { FlagArt } from './FlagArt';
 import { ClubCrestArt } from './ClubCrestArt';
 
@@ -196,6 +197,46 @@ export function AthletePortrait({
   );
 }
 
+/** Real photo with a painted fallback: if the photo asset fails to load
+ *  (missing / corrupt bundled file), the <img> swaps itself for the
+ *  painted AthletePortrait instead of showing a broken image — a blank
+ *  or broken portrait is structurally impossible. The failure flag
+ *  resets whenever the photo URL changes, so a card reused for another
+ *  player retries the new photo. Used by PlayerCard, PlayerShowcase
+ *  (WebGL-failure fallback) and the App goal-celebration banner. */
+export function PhotoPortrait({
+  photo, name, appearance, primary, secondary,
+}: {
+  photo: string;
+  name: string;
+  appearance: FaceAppearance;
+  primary: string;
+  secondary: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [photo]);
+  if (failed) {
+    return (
+      <AthletePortrait
+        appearance={appearance}
+        primary={primary}
+        secondary={secondary}
+        label={`${name} portrait`}
+      />
+    );
+  }
+  return (
+    <img
+      src={photo}
+      alt={`${name} portrait`}
+      className="h-full w-full object-cover"
+      style={{ objectPosition: '50% 18%' }}
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export interface PlayerCardProps {
   template: PlayerTemplate;
   card?: OwnedPlayerCard | null;
@@ -253,14 +294,31 @@ export function PlayerCard({ template, card, size = 'md', onClick, selected, eve
               </div>
             )}
           </div>
-          {/* portrait */}
-          <div className="mx-auto w-[68%] flex-1" style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.45))' }}>
-            <AthletePortrait
-              appearance={template.appearance}
-              primary={club?.primary ?? '#14532d'}
-              secondary={club?.secondary ?? '#ffffff'}
-              label={`${template.name} portrait`}
-            />
+          {/* portrait: real photo when we have one for this player,
+              otherwise the painted AthletePortrait (never blank). */}
+          <div className="mx-auto w-[68%] flex-1 overflow-hidden" style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.45))' }}>
+            {(() => {
+              const photo = facePhotoUrlFor(template.id);
+              if (photo) {
+                return (
+                  <PhotoPortrait
+                    photo={photo}
+                    name={template.name}
+                    appearance={template.appearance}
+                    primary={club?.primary ?? '#14532d'}
+                    secondary={club?.secondary ?? '#ffffff'}
+                  />
+                );
+              }
+              return (
+                <AthletePortrait
+                  appearance={template.appearance}
+                  primary={club?.primary ?? '#14532d'}
+                  secondary={club?.secondary ?? '#ffffff'}
+                  label={`${template.name} portrait`}
+                />
+              );
+            })()}
           </div>
           {/* name plate: surname band + flag & crest row — nothing else */}
           <div

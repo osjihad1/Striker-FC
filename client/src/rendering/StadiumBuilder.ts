@@ -2,6 +2,10 @@
 // 4-sided multi-tier bowl, roof ring, 4 floodlight towers with glow sprites,
 // and animated perimeter LED boards (scrolling sponsors + GOAL!!! flash).
 import * as THREE from 'three';
+import {
+  ADBOARDS_URL, CONCOURSE_URL, CROWD_DAY_URL, CROWD_NIGHT_URL,
+  bandTextureFromImage, loadPhotoImage, loadPhotoTexture,
+} from './TextureAssets';
 
 const SPONSORS = ['STRIKER FC', 'APEX SPORTS', 'TURBO BOOTS', 'NOVA ENERGY', 'GLOBAL CUP'];
 
@@ -39,6 +43,54 @@ export function buildStadium(): StadiumBuild {
   const tierMats = ['#2b3648', '#31405a', '#27334a'].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 }));
   const roofMat = new THREE.MeshStandardMaterial({ color: '#3d4a61', roughness: 0.6, metalness: 0.35, side: THREE.DoubleSide });
   const trussMat = new THREE.MeshStandardMaterial({ color: '#5b6b84', roughness: 0.45, metalness: 0.6 });
+  // Photo fascia band (ad boards) — dark fallback until the photo loads.
+  const fasciaMat = new THREE.MeshBasicMaterial({ color: '#0a0f1e' });
+
+  // --- Photo textures (textures pass, best-effort with plain fallbacks) --
+  // Crowd: a horizontal band (~6 rows) of the crowd photo, tiled 5x
+  // across each tier so the people read at real scale. Day/night swap
+  // follows the floodlights. Concourse: the back walls. Ad boards: the
+  // fascia band under the roof edge. Nothing here is load-bearing: if a
+  // photo fails, the plain colours above stay.
+  let crowdDayTex: THREE.Texture | null = null;
+  let crowdNightTex: THREE.Texture | null = null;
+  let floodlightsOn = false;
+  const applyCrowd = () => {
+    const tex = floodlightsOn ? crowdNightTex : crowdDayTex;
+    if (!tex) return;
+    for (const m of tierMats) {
+      if (m.map !== tex) { m.map = tex; m.color.set('#ffffff'); m.needsUpdate = true; }
+    }
+  };
+  const crowdBand = (img: HTMLImageElement): THREE.Texture => bandTextureFromImage(
+    img, Math.round(img.naturalHeight * 0.35), Math.round(img.naturalHeight * 0.18), 2048, 360, 5,
+  );
+  void loadPhotoImage(CROWD_DAY_URL).then((img) => {
+    if (!img) return;
+    crowdDayTex = crowdBand(img);
+    applyCrowd();
+  });
+  void loadPhotoImage(CROWD_NIGHT_URL).then((img) => {
+    if (!img) return;
+    crowdNightTex = crowdBand(img);
+    applyCrowd();
+  });
+  void loadPhotoTexture(CONCOURSE_URL, 1024, 512, 4).then((tex) => {
+    if (!tex) return;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(4, 1);
+    standMat.map = tex;
+    standMat.color.set('#ffffff');
+    standMat.needsUpdate = true;
+  });
+  void loadPhotoTexture(ADBOARDS_URL, 2048, 256, 4).then((tex) => {
+    if (!tex) return;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(6, 1);
+    fasciaMat.map = tex;
+    fasciaMat.color.set('#ffffff');
+    fasciaMat.needsUpdate = true;
+  });
 
   // --- Stands: 4 sides × 3 tiers of raked boxes -------------------------
   const sides: { pos: [number, number]; rotY: number; len: number }[] = [
@@ -82,6 +134,10 @@ export function buildStadium(): StadiumBuild {
       beam.rotation.x = 0.16;
       holder.add(beam);
     }
+    // Sponsor fascia band under the roof edge (photo ad boards).
+    const fascia = new THREE.Mesh(new THREE.BoxGeometry(side.len + 14, 1.1, 0.25), fasciaMat);
+    fascia.position.set(0, 19.2, 21);
+    holder.add(fascia);
   }
 
   // --- Floodlight towers --------------------------------------------------
@@ -168,10 +224,17 @@ export function buildStadium(): StadiumBuild {
   };
   drawBoards(0);
 
+  const setFloodlightsOn = (on: boolean) => {
+    floodlightsOn = on;
+    for (const s of glows) s.visible = on;
+    lampMat.emissiveIntensity = on ? 2.4 : 0.1;
+    applyCrowd(); // night crowd (phone lights) under floodlights
+  };
+
   return {
     group,
     update: (time: number, dt: number) => { elapsed += dt; drawBoards(time); },
     flashGoalBoards: () => { goalFlashUntil = elapsed + 4; },
-    setFloodlightsOn: (on: boolean) => { for (const s of glows) s.visible = on; lampMat.emissiveIntensity = on ? 2.4 : 0.1; },
+    setFloodlightsOn,
   };
 }

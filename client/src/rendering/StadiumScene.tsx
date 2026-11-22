@@ -128,6 +128,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
   const apiRef = useRef<{
     scene: SceneManager; crowd: ReturnType<typeof buildCrowd>;
     stadium: ReturnType<typeof buildStadium>; camera: CameraController;
+    pitch: ReturnType<typeof buildPitch>;
   } | null>(null);
   const propsRef = useRef({ cameraMode, demoAnim });
   propsRef.current = { cameraMode, demoAnim };
@@ -340,7 +341,7 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
     makeTeam(squads.home, homeKit, 'HOME_GK', 1);
     makeTeam(squads.away, awayKit, 'AWAY_GK', -1);
 
-    apiRef.current = { scene: sm, crowd, stadium, camera };
+    apiRef.current = { scene: sm, crowd, stadium, camera, pitch };
     sm.applyWeather('NIGHT_FLOODLIGHTS');
 
     let raf = 0;
@@ -781,7 +782,11 @@ export function StadiumScene({ weather, quality, crowdDensity = 1, cameraMode, g
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryNonce]);
 
-  useEffect(() => { apiRef.current?.scene.applyWeather(weather); apiRef.current?.stadium.setFloodlightsOn(weather !== 'DAY_CLEAR'); }, [weather]);
+  // SUNSET is a day preset (SceneManager's sunset sky, DAY ambience in
+  // App.tsx): only the two NIGHT_* presets use the night grass / night
+  // crowd and floodlights. (Was `weather !== 'DAY_CLEAR'`, which wrongly
+  // treated SUNSET as night for the pitch and crowd.)
+  useEffect(() => { const isNight = weather === 'NIGHT_FLOODLIGHTS' || weather === 'NIGHT_RAIN'; apiRef.current?.scene.applyWeather(weather); apiRef.current?.stadium.setFloodlightsOn(isNight); apiRef.current?.pitch.setNight(isNight); }, [weather]);
   useEffect(() => {
     const api = apiRef.current;
     if (api) { api.scene.applyGraphicsQuality(quality); api.crowd.setBudget(Math.round(api.scene.crowdBudget() * crowdDensityRef.current)); }

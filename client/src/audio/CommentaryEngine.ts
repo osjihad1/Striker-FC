@@ -14,6 +14,14 @@
 import { settingsStore } from '../store/useSettingsStore';
 import { formatNumber } from '../i18n/i18n';
 import type { ShotType, TeamSide } from '../core/types';
+import {
+  langClip,
+  recordedClipPlayer,
+  pickGoalClip,
+  pickNearMissClip,
+  pickSaveClip,
+  type CommentaryClipId,
+} from './RecordedAudio';
 
 export interface CommentaryLine {
   text: string;
@@ -294,6 +302,18 @@ export class CommentaryEngine {
   private listeners = new Set<(lines: CommentaryLine[]) => void>();
   private lastMinute = 0;
   private speech: SpeechQueue | null = null;
+  // Audio-fix (2026-11-22): mute must cancel the Web Speech queue, not
+  // just gate new lines. Subscribed in the constructor so the listener is
+  // live from the moment the engine exists (before the first spoken line).
+  private prevMuted = settingsStore.getState().muted;
+
+  constructor() {
+    settingsStore.subscribe(() => {
+      const s = settingsStore.getState();
+      if (s.muted && !this.prevMuted) this.speech?.stopAll();
+      this.prevMuted = s.muted;
+    });
+  }
 
   subscribe(fn: (lines: CommentaryLine[]) => void): () => void {
     this.listeners.add(fn);
@@ -311,15 +331,19 @@ export class CommentaryEngine {
     this.lines = [];
     this.lastMinute = 0;
     this.speech?.stopAll();
+    recordedClipPlayer.stop();
     this.emit();
   }
 
-  private push(text: string, minute: number, emotion: CommentaryEmotion = 'NEUTRAL', priority = 0, bnText?: string): void {
+  private push(text: string, minute: number, emotion: CommentaryEmotion = 'NEUTRAL', priority = 0, bnText?: string, clip?: CommentaryClipId): void {
     if (!settingsStore.getState().commentaryOn) return;
     this.lastMinute = minute;
     this.lines = [...this.lines, { text, bnText, atMinute: minute }].slice(-6);
     this.emit();
-    this.speak(text, emotion, priority, bnText);
+    // Recorded voice first: a real clip replaces the Web Speech line so the
+    // commentator never talks over himself. No clip → fall back to speech.
+    const playedClip = clip ? recordedClipPlayer.play(clip) : false;
+    if (!playedClip) this.speak(text, emotion, priority, bnText);
   }
 
   private emit(): void {
@@ -373,6 +397,10 @@ export class CommentaryEngine {
 
   private speak(text: string, emotion: CommentaryEmotion, priority: number, bnText?: string): void {
     const s = settingsStore.getState();
+    // Audio-fix (2026-11-22): muted must silence the Web Speech fallback
+    // too. Previously push() fell through here when the recorded clip
+    // refused to play while muted, so muting forced the spoken line.
+    if (s.muted) return;
     if (!s.commentaryOn || !s.commentarySpeech) return;
     // Design §5.3: in বাংলা mode the Bengali line is spoken ONLY when a
     // bn voice exists on the device; otherwise the English line is spoken
@@ -395,32 +423,44 @@ export class CommentaryEngine {
   }
 
   onGoal(c: GoalContext): void {
-    this.push(goalLine(c), c.minute, 'EXCITED', 2, goalLineBn(c));
+    const lang = settingsStore.getState().language;
+    this.push(goalLine(c), c.minute, 'EXCITED', 2, goalLineBn(c), pickGoalClip(c.minute, lang));
   }
 
   onSave(args: { gkName: string; difficulty: number; isParry: boolean }): void {
-    this.push(saveLine(args.gkName, args.difficulty, args.isParry), this.lastMinute, args.difficulty > 0.55 ? 'EXCITED' : 'NEUTRAL', 1, saveLineBn(args.gkName, args.difficulty, args.isParry));
+    const lang = settingsStore.getState().language;
+    this.push(saveLine(args.gkName, args.difficulty, args.isParry), this.lastMinute, args.difficulty > 0.55 ? 'EXCITED' : 'NEUTRAL', 1, saveLineBn(args.gkName, args.difficulty, args.isParry), lang === 'bn' ? 'save-bn' : pickSaveClip());
   }
 
   onPost(): void {
-    this.push('OFF THE WOODWORK! Inches away — the whole stadium gasps!', this.lastMinute, 'EXCITED', 1, 'পোস্টে লেগে ফিরে এলো! অল্পের জন্য গোল হলো না — পুরো স্টেডিয়াম হতবাক!');
+    const lang = settingsStore.getState().language;
+    this.push('OFF THE WOODWORK! Inches away — the whole stadium gasps!', this.lastMinute, 'EXCITED', 1, 'পোস্টে লেগে ফিরে এলো! অল্পের জন্য গোল হলো না — পুরো স্টেডিয়াম হতবাক!', lang === 'bn' ? 'near-miss-bn' : 'near-miss-02');
   }
 
   onNearMiss(args: { shooterName: string; xg: number }): void {
+    const lang = settingsStore.getState().language;
     this.push(
       args.xg > 0.3
         ? `SO CLOSE! ${args.shooterName} drags it inches wide — that was the chance!`
         : `${args.shooterName} lets fly — but it sails off target.`,
       this.lastMinute, args.xg > 0.3 ? 'TENSE' : 'NEUTRAL', args.xg > 0.3 ? 1 : 0,
       `${args.shooterName}-র শট অল্পের জন্য বাইরে।`,
+      lang === 'bn' ? 'near-miss-bn' : pickNearMissClip(),
     );
   }
 
+  onFoul(args: { playerName: string }): void {
+    const lang = settingsStore.getState().language;
+    this.push(`Foul — ${args.playerName} is penalised and the whistle goes.`, this.lastMinute, 'NEUTRAL', 0, `ফাউল — ${args.playerName}-র বিরুদ্ধে বাঁশি।`, langClip('foul', 'foul-bn', lang));
+  }
+
   onOffside(args: { playerName: string }): void {
-    this.push(`Flag is up — ${args.playerName} strayed offside. No goal, play restarts.`, this.lastMinute, 'SERIOUS', 1, `পতাকা উঠেছে — ${args.playerName} অফসাইডে ছিলেন। গোল নয়, খেলা আবার শুরু।`);
+    const lang = settingsStore.getState().language;
+    this.push(`Flag is up — ${args.playerName} strayed offside. No goal, play restarts.`, this.lastMinute, 'SERIOUS', 1, `পতাকা উঠেছে — ${args.playerName} অফসাইডে ছিলেন। গোল নয়, খেলা আবার শুরু।`, langClip('offside', 'offside-bn', lang));
   }
 
   onCard(args: { playerName: string; card: 'YELLOW' | 'RED' }): void {
+    const lang = settingsStore.getState().language;
     this.push(
       args.card === 'RED'
         ? `RED CARD! ${args.playerName} is sent off — his team must survive with ten men!`
@@ -429,6 +469,7 @@ export class CommentaryEngine {
       args.card === 'RED'
         ? `লাল কার্ড! ${args.playerName} মাঠ ছাড়তে হবে!`
         : `${args.playerName}-কে হলুদ কার্ড।`,
+      args.card === 'RED' ? langClip('red', 'red-bn', lang) : langClip('yellow', 'yellow-bn', lang),
     );
   }
 
@@ -447,36 +488,43 @@ export class CommentaryEngine {
   }
 
   onSubstitution(args: { offName: string; onName: string }): void {
-    this.push(`Change made — ${args.onName} comes on for ${args.offName}. Fresh legs for the run-in.`, this.lastMinute, 'NEUTRAL', 0, `বদলি — ${args.offName}-র জায়গায় ${args.onName} আসছেন।`);
+    const lang = settingsStore.getState().language;
+    this.push(`Change made — ${args.onName} comes on for ${args.offName}. Fresh legs for the run-in.`, this.lastMinute, 'NEUTRAL', 0, `বদলি — ${args.offName}-র জায়গায় ${args.onName} আসছেন।`, langClip('substitution', 'substitution-bn', lang));
   }
 
   onPenalty(args: { side: TeamSide }): void {
+    const lang = settingsStore.getState().language;
     this.push(
       args.side === 'HOME'
         ? 'PENALTY! The referee points to the spot — a golden chance to score!'
         : 'PENALTY AGAINST! The referee points to the spot — the keeper has to be the hero now!',
       this.lastMinute, 'TENSE', 2,
       'পেনাল্টি! রেফারি স্পটের দিকে ইশারা করলেন!',
+      langClip('penalty', 'penalty-bn', lang),
     );
   }
 
   onCorner(args: { side: TeamSide }): void {
+    const lang = settingsStore.getState().language;
     this.push(
       args.side === 'HOME'
         ? 'Corner — the big men come up from the back. This crowd smells a goal.'
         : 'Corner to the visitors — the defence has to stay switched on here.',
       this.lastMinute, 'NEUTRAL', 0,
       'কর্নার এলো…',
+      langClip('corner', 'corner-bn', lang),
     );
   }
 
   onFreeKick(args: { side: TeamSide; indirect: boolean }): void {
+    const lang = settingsStore.getState().language;
     this.push(
       args.indirect
         ? 'Free kick in a harmless area — a chance to reset and breathe.'
         : 'Free kick in shooting range! The wall lines up, the keeper shuffles across…',
       this.lastMinute, args.indirect ? 'NEUTRAL' : 'TENSE', args.indirect ? 0 : 1,
       'বিপজ্জনক জায়গায় ফ্রি কিক…',
+      args.indirect ? undefined : langClip('freekick', 'freekick-bn', lang),
     );
   }
 
@@ -490,10 +538,12 @@ export class CommentaryEngine {
   }
 
   onHalfTime(homeScore: number, awayScore: number): void {
-    this.push(`HALF TIME — ${homeScore}–${awayScore}. The managers earn their money now: fifteen minutes to change this game.`, 45, 'NEUTRAL', 1, `বিরতি — ${formatNumber(homeScore)}–${formatNumber(awayScore)}। দুই দলেরই বিশ্রাম।`);
+    const lang = settingsStore.getState().language;
+    this.push(`HALF TIME — ${homeScore}–${awayScore}. The managers earn their money now: fifteen minutes to change this game.`, 45, 'NEUTRAL', 1, `বিরতি — ${formatNumber(homeScore)}–${formatNumber(awayScore)}। দুই দলেরই বিশ্রাম।`, langClip('halftime', 'halftime-bn', lang));
   }
 
   onKickoff(period: number): void {
+    const lang = settingsStore.getState().language;
     this.push(
       period === 1
         ? 'We are under way — ninety minutes of football ahead of us.'
@@ -507,11 +557,19 @@ export class CommentaryEngine {
         : period === 2
           ? 'দ্বিতীয়ার্ধ শুরু — এখনো সবকিছু বাকি।'
           : 'অতিরিক্ত সময় — জয়ী খুঁজতে ত্রিশ মিনিট, নয়তো পেনাল্টি।',
+      period === 1 ? (lang === 'bn' ? 'kickoff-bn' : 'kickoff') : undefined,
     );
   }
 
   onFullTime(homeScore: number, awayScore: number): void {
-    this.push(`FULL TIME — it ends ${homeScore}–${awayScore}. What a match at this stadium!`, 90, 'EXCITED', 2, `খেলা শেষ — ${formatNumber(homeScore)}–${formatNumber(awayScore)}।`);
+    const lang = settingsStore.getState().language;
+    const homeWin = homeScore > awayScore;
+    this.push(
+      `FULL TIME — it ends ${homeScore}–${awayScore}. What a match at this stadium!`,
+      90, 'EXCITED', 2,
+      `খেলা শেষ — ${formatNumber(homeScore)}–${formatNumber(awayScore)}।`,
+      homeWin ? (lang === 'bn' ? 'win-bn' : 'win') : langClip('fulltime', 'fulltime-bn', lang),
+    );
   }
 }
 

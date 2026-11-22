@@ -9,6 +9,8 @@ import type { PlayerTemplate, SaveProfile } from '../../core/types';
 import { getNationalTeams, type NationalTeam } from '../../data/NationalTeams';
 import { startWorldCup, worldCupNextOpponent } from '../../modes/InternationalCupMode';
 import { formatNumber, t } from '../../i18n/i18n';
+import bannerIntlCupUrl from '../../assets/art/banner-intl-cup.jpg';
+import trophyWorldUrl from '../../assets/art/trophy-world.jpg';
 
 function Crest({ team, size = 40 }: { team: NationalTeam; size?: number }) {
   return (
@@ -60,7 +62,11 @@ export function NationalTeamsScreen({ onPlayFriendly, profile, onCommit, onPlayC
 
       {/* Epic P1-4: the International Cup — a full World-Cup road. */}
       {profile && onCommit && onPlayCupMatch && (
-        <div className="mt-4 rounded-3xl border border-[var(--gold)]/50 bg-gradient-to-br from-[#171106] via-[#0b1526] to-[#0b1526] p-4" aria-label={t('nations.cupTitle')}>
+        <div className="relative mt-4 overflow-hidden rounded-3xl border border-[var(--gold)]/50 bg-gradient-to-br from-[#171106] via-[#0b1526] to-[#0b1526] p-4" aria-label={t('nations.cupTitle')}>
+          {/* Trophy & menu art: stadium banner behind the cup panel; the
+              gold gradient stays as the fallback if the photo fails. */}
+          <img src={bannerIntlCupUrl} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[50%_35%] opacity-45" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <div className="relative">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[var(--gold)]">{t('nations.cupTitle')}</p>
@@ -130,8 +136,12 @@ export function NationalTeamsScreen({ onPlayFriendly, profile, onCommit, onPlayC
             <p className="mt-2.5 text-[12px] font-medium leading-relaxed text-white/80">{profile.worldCup.log[profile.worldCup.log.length - 1]}</p>
           )}
           {profile.worldCup?.stage === 'WON' && (
-            <p className="mt-2 font-display text-xl font-bold uppercase tracking-wide text-[var(--gold)]">{t('nations.champions')}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <img src={trophyWorldUrl} alt="" aria-hidden className="h-28 w-auto rounded-xl object-cover shadow-2xl ring-1 ring-[var(--gold)]/70" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              <p className="font-display min-w-0 flex-1 text-xl font-bold uppercase tracking-wide text-[var(--gold)]">{t('nations.champions')}</p>
+            </div>
           )}
+          </div>
         </div>
       )}
 
